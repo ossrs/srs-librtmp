@@ -23,12 +23,12 @@ int main(int argc, char** argv)
         exit(-1);
     }
 	
-	// startup socket for windows.
-	WSADATA WSAData;
-	if (WSAStartup(MAKEWORD(1, 1), &WSAData)) {
-		printf("WSAStartup failed.\n");
-		return -1;
-	}
+    // startup socket for windows.
+    WSADATA WSAData;
+    if (WSAStartup(MAKEWORD(1, 1), &WSAData)) {
+        printf("WSAStartup failed.\n");
+        return -1;
+    }
     
     srs_lib_trace("rtmp url: %s", argv[1]);
     srs_rtmp_t rtmp = srs_rtmp_create(argv[1]);
@@ -72,8 +72,8 @@ int main(int argc, char** argv)
 rtmp_destroy:
     srs_rtmp_destroy(rtmp);
 
-	// cleanup socket for windows.
-	WSACleanup();
+    // cleanup socket for windows.
+    WSACleanup();
     
     return 0;
 }

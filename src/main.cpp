@@ -1,7 +1,7 @@
 /**
 # Example to use srs-librtmp
 # see: https://github.com/winlinvip/simple-rtmp-server/wiki/v2_CN_SrsLibrtmp
-    gcc example.c srs_librtmp.cpp -g -O0 -lstdc++ -o example
+    gcc main.cpp srs_librtmp.cpp -g -O0 -lstdc++ -o output
 */
 #include <windows.h>
 #include <stdio.h>

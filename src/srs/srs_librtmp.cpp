@@ -27,10 +27,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef SRS_AUTO_HEADER_HPP
 #define SRS_AUTO_HEADER_HPP
 
-#define SRS_AUTO_BUILD_TS "1416384989"
-#define SRS_AUTO_BUILD_DATE "2014-11-19 16:16:29"
-#define SRS_AUTO_UNAME "Linux dev6 2.6.32-431.29.2.el6.x86_64 #1 SMP Tue Sep 9 21:36:05 UTC 2014 x86_64 x86_64 x86_64 GNU/Linux"
-#define SRS_AUTO_USER_CONFIGURE "--x86-x64  --export-librtmp-single=/home/winlin/srs.librtmp/src/srs"
+#define SRS_AUTO_BUILD_TS "1417141673"
+#define SRS_AUTO_BUILD_DATE "2014-11-28 10:27:53"
+#define SRS_AUTO_UNAME "Linux dev6 2.6.32-71.el6.x86_64 #1 SMP Fri May 20 03:51:51 BST 2011 x86_64 x86_64 x86_64 GNU/Linux"
+#define SRS_AUTO_USER_CONFIGURE "--x86-x64  --export-librtmp-single=/home/winlin/git/srs.librtmp/src/srs"
 #define SRS_AUTO_CONFIGURE "--prefix=/usr/local/srs --without-hls --without-dvr --without-nginx --without-ssl --without-ffmpeg --without-transcode --without-ingest --without-stat --without-http-callback --without-http-server --without-http-api --with-librtmp --with-research --without-utest --without-gperf --without-gmc --without-gmp --without-gcp --without-gprof --without-arm-ubuntu12 --without-mips-ubuntu12 --log-trace"
 
 #define SRS_AUTO_EMBEDED_TOOL_CHAIN "normal x86/x64 gcc"
@@ -113,7 +113,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // current release version
 #define VERSION_MAJOR       2
 #define VERSION_MINOR       0
-#define VERSION_REVISION    26
+#define VERSION_REVISION    36
 // server info.
 #define RTMP_SIG_SRS_KEY "SRS"
 #define RTMP_SIG_SRS_ROLE "origin/edge server"
@@ -124,7 +124,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define RTMP_SIG_SRS_EMAIL "winlin@vip.126.com"
 #define RTMP_SIG_SRS_LICENSE "The MIT License (MIT)"
 #define RTMP_SIG_SRS_COPYRIGHT "Copyright (c) 2013-2014 winlin"
-#define RTMP_SIG_SRS_PRIMARY_AUTHROS "winlin,wenjie.zhao"
+#define RTMP_SIG_SRS_PRIMARY "winlin"
+#define RTMP_SIG_SRS_AUTHROS "wenjie.zhao"
 #define RTMP_SIG_SRS_CONTRIBUTORS_URL RTMP_SIG_SRS_URL"/blob/master/AUTHORS.txt"
 #define RTMP_SIG_SRS_HANDSHAKE RTMP_SIG_SRS_KEY"("RTMP_SIG_SRS_VERSION")"
 #define RTMP_SIG_SRS_RELEASE "https://github.com/winlinvip/simple-rtmp-server/tree/1.0release"
@@ -296,8 +297,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 //#include <srs_core.hpp>
 
-// success, ok
+// for srs-librtmp, @see https://github.com/winlinvip/simple-rtmp-server/issues/213
+#ifndef _WIN32
 #define ERROR_SUCCESS                       0
+#endif
 
 ///////////////////////////////////////////////////////
 // system error.
@@ -455,6 +458,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define ERROR_H264_DROP_BEFORE_SPS_PPS      3043
 #define ERROR_H264_DUPLICATED_SPS           3044
 #define ERROR_H264_DUPLICATED_PPS           3045
+#define ERROR_AAC_REQUIRED_ADTS             3046
+#define ERROR_AAC_ADTS_HEADER               3047
+#define ERROR_AAC_DATA_INVALID              3048
 
 /**
 * whether the error code is an system control error.
@@ -1273,6 +1279,25 @@ enum SrsCodecAudio
     SrsCodecAudioSpeex                                 = 11,
     SrsCodecAudioReservedMP3_8kHz                     = 14,
     SrsCodecAudioReservedDeviceSpecificSound         = 15,
+};
+
+/**
+* the FLV/RTMP supported audio sample rate.
+* Sampling rate. The following values are defined:
+* 0 = 5.5 kHz = 5512 Hz
+* 1 = 11 kHz = 11025 Hz
+* 2 = 22 kHz = 22050 Hz
+* 3 = 44 kHz = 44100 Hz
+*/
+enum SrsCodecAudioSampleRate
+{
+    // set to the max value to reserved, for array map.
+    SrsCodecAudioSampleRateReserved                 = 4,
+    
+    SrsCodecAudioSampleRate5512                     = 0,
+    SrsCodecAudioSampleRate11025                    = 1,
+    SrsCodecAudioSampleRate22050                    = 2,
+    SrsCodecAudioSampleRate44100                    = 3,
 };
 
 /**
@@ -2758,6 +2783,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //#include <srs_core.hpp>
 
 #include <map>
+#include <vector>
 #include <string>
 
 // for srs-librtmp, @see https://github.com/winlinvip/simple-rtmp-server/issues/213
@@ -2940,6 +2966,16 @@ private:
     * input ack size, when to send the acked packet.
     */
     AckWindowSize in_ack_size;
+    /**
+    * whether auto response when recv messages.
+    * default to true for it's very easy to use the protocol stack.
+    * @see: https://github.com/winlinvip/simple-rtmp-server/issues/217
+    */
+    bool auto_response_when_recv;
+    /**
+    * when not auto response message, manual flush the messages in queue.
+    */
+    std::vector<SrsPacket*> manual_response_queue;
 // peer out
 private:
     /**
@@ -2971,6 +3007,20 @@ public:
     */
     SrsProtocol(ISrsProtocolReaderWriter* io);
     virtual ~SrsProtocol();
+public:
+    /**
+    * set the auto response message when recv for protocol stack.
+    * @param v, whether auto response message when recv message.
+    * @see: https://github.com/winlinvip/simple-rtmp-server/issues/217
+    */
+    virtual void set_auto_response(bool v);
+    /**
+    * flush for manual response when the auto response is disabled
+    * by set_auto_response(false), we default use auto response, so donot
+    * need to call this api(the protocol sdk will auto send message).
+    * @see the auto_response_when_recv and manual_response_queue.
+    */
+    virtual int manual_response_flush();
 public:
     /**
     * set/get the recv timeout in us.
@@ -3097,6 +3147,10 @@ private:
     * the caller must free the param msgs.
     */
     virtual int do_send_messages(SrsMessage** msgs, int nb_msgs);
+    /**
+    * underlayer api for send and free packet.
+    */
+    virtual int do_send_and_free_packet(SrsPacket* packet, int stream_id);
     /**
     * generate the chunk header for msg.
     * @param mh, the header of msg to send.
@@ -4609,14 +4663,16 @@ public:
     * SRS debug info:
     * @param srs_server_ip, debug info, server ip client connected at.
     * @param srs_server, server info.
-    * @param srs_primary_authors, primary authors.
+    * @param srs_primary, primary authors.
+    * @param srs_authors, authors.
     * @param srs_id, int, debug info, client id in server log.
     * @param srs_pid, int, debug info, server pid in log.
     */
     virtual int connect_app2(
         std::string app, std::string tc_url, SrsRequest* req, bool debug_srs_upnode,
-        std::string& srs_server_ip, std::string& srs_server, std::string& srs_primary_authors, 
-        std::string& srs_version, int& srs_id, int& srs_pid
+        std::string& srs_server_ip, std::string& srs_server, std::string& srs_primary, 
+        std::string& srs_authors, std::string& srs_version, int& srs_id, 
+        int& srs_pid
     );
     /**
     * create a stream, then play/publish data over this stream.
@@ -4675,6 +4731,12 @@ public:
     virtual ~SrsRtmpServer();
 // protocol methods proxy
 public:
+    /**
+    * set the auto response message when recv for protocol stack.
+    * @param v, whether auto response message when recv message.
+    * @see: https://github.com/winlinvip/simple-rtmp-server/issues/217
+    */
+    virtual void set_auto_response(bool v);
     /**
     * set/get the recv timeout in us.
     * if timeout, recv/send message return ERROR_SOCKET_TIMEOUT.
@@ -5357,6 +5419,13 @@ extern bool srs_bytes_equals(void* pa, void* pb, int size);
 */
 extern bool srs_avc_startswith_annexb(SrsStream* stream, int* pnb_start_code = NULL);
 
+/**
+* whether stream starts with the aac ADTS 
+* from aac-mp4a-format-ISO_IEC_14496-3+2001.pdf, page 75, 1.A.2.2 ADTS.
+* start code must be '1111 1111 1111'B, that is 0xFFF
+*/
+extern bool srs_aac_startswith_adts(SrsStream* stream);
+
 #endif
 
 // following is generated by src/rtmp/srs_protocol_msg_array.hpp
@@ -5460,7 +5529,23 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <sys/types.h>
 
 // for srs-librtmp, @see https://github.com/winlinvip/simple-rtmp-server/issues/213
-#ifdef _WIN32
+#ifndef _WIN32
+    #define SOCKET_ETIME ETIME
+    #define SOCKET_ECONNRESET ECONNRESET
+
+    #define SOCKET int
+    #define SOCKET_ERRNO() errno
+    #define SOCKET_RESET(fd) fd = -1; (void)0
+    #define SOCKET_CLOSE(fd) \
+        if (fd > 0) {\
+            ::close(fd); \
+            fd = -1; \
+        } \
+        (void)0
+    #define SOCKET_VALID(x) (x > 0)
+    #define SOCKET_SETUP() (void)0
+    #define SOCKET_CLEANUP() (void)0
+#else
     #define _CRT_SECURE_NO_WARNINGS
     typedef unsigned long long u_int64_t;
     typedef long long int64_t;
@@ -5479,6 +5564,17 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     #include <windows.h>
     int gettimeofday(struct timeval* tv, struct timezone* tz);
     #define PRId64 "lld"
+
+    #define SOCKET_ETIME WSAETIMEDOUT
+    #define SOCKET_ECONNRESET WSAECONNRESET
+    #define SOCKET_ERRNO() WSAGetLastError()
+    #define SOCKET_RESET(x) x=INVALID_SOCKET
+    #define SOCKET_CLOSE(x) if(x!=INVALID_SOCKET){::closesocket(x);x=INVALID_SOCKET;}
+    #define SOCKET_VALID(x) (x!=INVALID_SOCKET)
+    #define SOCKET_BUFF(x) ((char*)x)
+    #define SOCKET_SETUP() socket_setup()
+    #define SOCKET_CLEANUP() socket_cleanup()
+    
     typedef int socklen_t;
     const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
     typedef int mode_t;
@@ -5487,18 +5583,23 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     #define S_IRGRP 0
     #define S_IWGRP 0
     #define S_IROTH 0
-    int open(const char *pathname, int flags);
-    int open(const char *pathname, int flags, mode_t mode);
-    int close(int fd);
-    off_t lseek(int fd, off_t offset, int whence);
-    ssize_t write(int fd, const void *buf, size_t count);
-    ssize_t read(int fd, void *buf, size_t count);
+    
+    #include <io.h>
+    #include <fcntl.h>
+    #define open _open
+    #define close _close
+    #define lseek _lseek
+    #define write _write
+    #define read _read
+    
     typedef int pid_t;
     pid_t getpid(void);
     #define snprintf _snprintf
     ssize_t writev(int fd, const struct iovec *iov, int iovcnt);
     typedef int64_t useconds_t;
     int usleep(useconds_t usec);
+    int socket_setup();
+    int socket_cleanup();
 #endif
 
 /**
@@ -5512,6 +5613,18 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifdef __cplusplus
 extern "C"{
 #endif
+
+// typedefs
+typedef int srs_bool;
+
+/*************************************************************
+**************************************************************
+* srs-librtmp version
+**************************************************************
+*************************************************************/
+extern int srs_version_major();
+extern int srs_version_minor();
+extern int srs_version_revision();
 
 /*************************************************************
 **************************************************************
@@ -5563,19 +5676,19 @@ extern void srs_rtmp_destroy(srs_rtmp_t rtmp);
 * not depends on ssl.
 */
 /**
-* srs_simple_handshake equals to invoke:
-*       __srs_dns_resolve()
-*       __srs_connect_server()
-*       __srs_do_simple_handshake()
+* srs_rtmp_handshake equals to invoke:
+*       __srs_rtmp_dns_resolve()
+*       __srs_rtmp_connect_server()
+*       __srs_rtmp_do_simple_handshake()
 * user can use these functions if needed.
 */
-extern int srs_simple_handshake(srs_rtmp_t rtmp);
+extern int srs_rtmp_handshake(srs_rtmp_t rtmp);
 // parse uri, create socket, resolve host
-extern int __srs_dns_resolve(srs_rtmp_t rtmp);
+extern int __srs_rtmp_dns_resolve(srs_rtmp_t rtmp);
 // connect socket to server
-extern int __srs_connect_server(srs_rtmp_t rtmp);
+extern int __srs_rtmp_connect_server(srs_rtmp_t rtmp);
 // do simple handshake over socket.
-extern int __srs_do_simple_handshake(srs_rtmp_t rtmp);
+extern int __srs_rtmp_do_simple_handshake(srs_rtmp_t rtmp);
 
 /**
 * connect to rtmp vhost/app
@@ -5585,7 +5698,7 @@ extern int __srs_do_simple_handshake(srs_rtmp_t rtmp);
 *
 * @return 0, success; otherswise, failed.
 */
-extern int srs_connect_app(srs_rtmp_t rtmp);
+extern int srs_rtmp_connect_app(srs_rtmp_t rtmp);
 
 /**
 * connect to server, get the debug srs info.
@@ -5593,15 +5706,17 @@ extern int srs_connect_app(srs_rtmp_t rtmp);
 * SRS debug info:
 * @param srs_server_ip, 128bytes, debug info, server ip client connected at.
 * @param srs_server, 128bytes, server info.
-* @param srs_primary_authors, 128bytes, primary authors.
+* @param srs_primary, 128bytes, primary authors.
+* @param srs_authors, 128bytes, authors.
 * @param srs_version, 32bytes, server version.
 * @param srs_id, int, debug info, client id in server log.
 * @param srs_pid, int, debug info, server pid in log.
 *
 * @return 0, success; otherswise, failed.
 */
-extern int srs_connect_app2(srs_rtmp_t rtmp,
-    char srs_server_ip[128], char srs_server[128], char srs_primary_authors[128], 
+extern int srs_rtmp_connect_app2(srs_rtmp_t rtmp,
+    char srs_server_ip[128], char srs_server[128], 
+    char srs_primary[128], char srs_authors[128], 
     char srs_version[32], int* srs_id, int* srs_pid
 );
 
@@ -5612,7 +5727,7 @@ extern int srs_connect_app2(srs_rtmp_t rtmp,
 * next: destroy
 * @return 0, success; otherwise, failed.
 */
-extern int srs_play_stream(srs_rtmp_t rtmp);
+extern int srs_rtmp_play_stream(srs_rtmp_t rtmp);
 
 /**
 * publish a live stream.
@@ -5621,7 +5736,7 @@ extern int srs_play_stream(srs_rtmp_t rtmp);
 * next: destroy
 * @return 0, success; otherwise, failed.
 */
-extern int srs_publish_stream(srs_rtmp_t rtmp);
+extern int srs_rtmp_publish_stream(srs_rtmp_t rtmp);
 
 /**
 * do bandwidth check with srs server.
@@ -5638,7 +5753,7 @@ extern int srs_publish_stream(srs_rtmp_t rtmp);
 *
 * @return 0, success; otherswise, failed.
 */
-extern int srs_bandwidth_check(srs_rtmp_t rtmp, 
+extern int srs_rtmp_bandwidth_check(srs_rtmp_t rtmp, 
     int64_t* start_time, int64_t* end_time, 
     int* play_kbps, int* publish_kbps,
     int* play_bytes, int* publish_bytes,
@@ -5654,16 +5769,6 @@ extern int srs_bandwidth_check(srs_rtmp_t rtmp,
 #define SRS_RTMP_TYPE_VIDEO 9
 // 18 = script data
 #define SRS_RTMP_TYPE_SCRIPT 18
-/**
-* convert the flv tag type to string.
-*     SRS_RTMP_TYPE_AUDIO to "Audio"
-*     SRS_RTMP_TYPE_VIDEO to "Video"
-*     SRS_RTMP_TYPE_SCRIPT to "Data"
-*     otherwise, "Unknown"
-* @remark user never free the return char*, 
-*   it's static shared const string.
-*/
-extern const char* srs_type2string(char type);
 /**
 * read a audio/video/script-data packet from rtmp stream.
 * @param type, output the packet type, macros:
@@ -5685,50 +5790,201 @@ extern const char* srs_type2string(char type);
 *
 * @return 0, success; otherswise, failed.
 */
-extern int srs_read_packet(srs_rtmp_t rtmp, 
+extern int srs_rtmp_read_packet(srs_rtmp_t rtmp, 
     char* type, u_int32_t* timestamp, char** data, int* size
 );
-extern int srs_write_packet(srs_rtmp_t rtmp, 
+extern int srs_rtmp_write_packet(srs_rtmp_t rtmp, 
     char type, u_int32_t timestamp, char* data, int size
 );
 
-// get protocol stack version
-extern int srs_version_major();
-extern int srs_version_minor();
-extern int srs_version_revision();
+/*************************************************************
+**************************************************************
+* audio raw codec
+**************************************************************
+*************************************************************/
+/**
+* write an audio raw frame to srs.
+* not similar to h.264 video, the audio never aggregated, always
+* encoded one frame by one, so this api is used to write a frame.
+*
+* @param sound_format Format of SoundData. The following values are defined:
+*               0 = Linear PCM, platform endian
+*               1 = ADPCM
+*               2 = MP3
+*               3 = Linear PCM, little endian
+*               4 = Nellymoser 16 kHz mono
+*               5 = Nellymoser 8 kHz mono
+*               6 = Nellymoser
+*               7 = G.711 A-law logarithmic PCM
+*               8 = G.711 mu-law logarithmic PCM
+*               9 = reserved
+*               10 = AAC
+*               11 = Speex
+*               14 = MP3 8 kHz
+*               15 = Device-specific sound
+*               Formats 7, 8, 14, and 15 are reserved.
+*               AAC is supported in Flash Player 9,0,115,0 and higher.
+*               Speex is supported in Flash Player 10 and higher.
+* @param sound_rate Sampling rate. The following values are defined:
+*               0 = 5.5 kHz
+*               1 = 11 kHz
+*               2 = 22 kHz
+*               3 = 44 kHz
+* @param sound_size Size of each audio sample. This parameter only pertains to
+*               uncompressed formats. Compressed formats always decode
+*               to 16 bits internally.
+*               0 = 8-bit samples
+*               1 = 16-bit samples
+* @param sound_type Mono or stereo sound
+*               0 = Mono sound
+*               1 = Stereo sound
+* @param timestamp The timestamp of audio.
+*
+* @example /trunk/research/librtmp/srs_aac_raw_publish.c
+* @example /trunk/research/librtmp/srs_audio_raw_publish.c
+*
+* @remark for aac, the frame must be in ADTS format. 
+*       @see aac-mp4a-format-ISO_IEC_14496-3+2001.pdf, page 75, 1.A.2.2 ADTS
+* @remark for aac, only support profile 1-4, AAC main/LC/SSR/LTP,
+*       @see aac-mp4a-format-ISO_IEC_14496-3+2001.pdf, page 23, 1.5.1.1 Audio object type
+*
+* @see https://github.com/winlinvip/simple-rtmp-server/issues/212
+* @see E.4.2.1 AUDIODATA of video_file_format_spec_v10_1.pdf
+* 
+* @return 0, success; otherswise, failed.
+*/
+extern int srs_audio_write_raw_frame(srs_rtmp_t rtmp, 
+    char sound_format, char sound_rate, char sound_size, char sound_type,
+    char* frame, int frame_size, u_int32_t timestamp
+);
+
+/**
+* whether aac raw data is in adts format,
+* which bytes sequence matches '1111 1111 1111'B, that is 0xFFF.
+* @param aac_raw_data the input aac raw data, a encoded aac frame data.
+* @param ac_raw_size the size of aac raw data.
+*
+* @reamrk used to check whether current frame is in adts format.
+*       @see aac-mp4a-format-ISO_IEC_14496-3+2001.pdf, page 75, 1.A.2.2 ADTS
+* @example /trunk/research/librtmp/srs_aac_raw_publish.c
+*
+* @return 0 false; otherwise, true.
+*/
+extern srs_bool srs_aac_is_adts(char* aac_raw_data, int ac_raw_size);
+
+/**
+* parse the adts header to get the frame size,
+* which bytes sequence matches '1111 1111 1111'B, that is 0xFFF.
+* @param aac_raw_data the input aac raw data, a encoded aac frame data.
+* @param ac_raw_size the size of aac raw data.
+*
+* @return failed when <=0 failed; otherwise, ok.
+*/
+extern int srs_aac_adts_frame_size(char* aac_raw_data, int ac_raw_size);
 
 /*************************************************************
 **************************************************************
-* utilities
+* h264 raw codec
 **************************************************************
 *************************************************************/
-extern int64_t srs_get_time_ms();
-extern int64_t srs_get_nsend_bytes(srs_rtmp_t rtmp);
-extern int64_t srs_get_nrecv_bytes(srs_rtmp_t rtmp);
 /**
-* parse the dts and pts by time in header and data in tag,
-* or to parse the RTMP packet by srs_read_packet().
-*
-* @param time, the timestamp of tag, read by srs_flv_read_tag_header().
-* @param type, the type of tag, read by srs_flv_read_tag_header().
-* @param data, the data of tag, read by srs_flv_read_tag_data().
-* @param size, the size of tag, read by srs_flv_read_tag_header().
-* @param ppts, output the pts in ms,
-*
+* write h.264 raw frame over RTMP to rtmp server.
+* @param frames the input h264 raw data, encoded h.264 I/P/B frames data.
+*       frames can be one or more than one frame,
+*       each frame prefixed h.264 annexb header, by N[00] 00 00 01, where N>=0, 
+*       for instance, frame = header(00 00 00 01) + payload(67 42 80 29 95 A0 14 01 6E 40)
+*       about annexb, @see H.264-AVC-ISO_IEC_14496-10.pdf, page 211.
+* @param frames_size the size of h264 raw data. 
+*       assert frames_size > 0, at least has 1 bytes header.
+* @param dts the dts of h.264 raw data.
+* @param pts the pts of h.264 raw data.
+* 
+* @remark, user should free the frames.
+* @remark, the tbn of dts/pts is 1/1000 for RTMP, that is, in ms.
+* @remark, cts = pts - dts
+* @remark, use srs_h264_startswith_annexb to check whether frame is annexb format.
+* @example /trunk/research/librtmp/srs_h264_raw_publish.c
+* @see https://github.com/winlinvip/simple-rtmp-server/issues/66
+* 
 * @return 0, success; otherswise, failed.
-* @remark, the dts always equals to @param time.
-* @remark, the pts=dts for audio or data.
-* @remark, video only support h.264.
+*       for dvbsp error, @see srs_h264_is_dvbsp_error().
+*       for duplictated sps error, @see srs_h264_is_duplicated_sps_error().
+*       for duplictated pps error, @see srs_h264_is_duplicated_pps_error().
 */
-extern int srs_parse_timestamp(
-    u_int32_t time, char type, char* data, int size,
-    u_int32_t* ppts
+/**
+For the example file: 
+    http://winlinvip.github.io/srs.release/3rdparty/720p.h264.raw
+The data sequence is:
+    // SPS
+    000000016742802995A014016E40
+    // PPS
+    0000000168CE3880
+    // IFrame
+    0000000165B8041014C038008B0D0D3A071.....
+    // PFrame
+    0000000141E02041F8CDDC562BBDEFAD2F.....
+User can send the SPS+PPS, then each frame:
+    // SPS+PPS
+    srs_h264_write_raw_frames('000000016742802995A014016E400000000168CE3880', size, dts, pts)
+    // IFrame
+    srs_h264_write_raw_frames('0000000165B8041014C038008B0D0D3A071......', size, dts, pts)
+    // PFrame
+    srs_h264_write_raw_frames('0000000141E02041F8CDDC562BBDEFAD2F......', size, dts, pts)
+User also can send one by one:
+    // SPS
+    srs_h264_write_raw_frames('000000016742802995A014016E4', size, dts, pts)
+    // PPS
+    srs_h264_write_raw_frames('00000000168CE3880', size, dts, pts)
+    // IFrame
+    srs_h264_write_raw_frames('0000000165B8041014C038008B0D0D3A071......', size, dts, pts)
+    // PFrame
+    srs_h264_write_raw_frames('0000000141E02041F8CDDC562BBDEFAD2F......', size, dts, pts) 
+*/
+extern int srs_h264_write_raw_frames(srs_rtmp_t rtmp, 
+    char* frames, int frames_size, u_int32_t dts, u_int32_t pts
 );
-
-// log to console, for use srs-librtmp application.
-extern const char* srs_format_time();
-#define srs_lib_trace(msg, ...) printf("[%s] ", srs_format_time());printf(msg, ##__VA_ARGS__);printf("\n")
-#define srs_lib_verbose(msg, ...) printf("[%s] ", srs_format_time());printf(msg, ##__VA_ARGS__);printf("\n")
+/**
+* whether error_code is dvbsp(drop video before sps/pps/sequence-header) error.
+*
+* @see https://github.com/winlinvip/simple-rtmp-server/issues/203
+* @example /trunk/research/librtmp/srs_h264_raw_publish.c
+* @remark why drop video?
+*       some encoder, for example, ipcamera, will send sps/pps before each IFrame,
+*       so, when error and reconnect the rtmp, the first video is not sps/pps(sequence header),
+*       this will cause SRS server to disable HLS.
+*/
+extern srs_bool srs_h264_is_dvbsp_error(int error_code);
+/**
+* whether error_code is duplicated sps error.
+* 
+* @see https://github.com/winlinvip/simple-rtmp-server/issues/204
+* @example /trunk/research/librtmp/srs_h264_raw_publish.c
+*/
+extern srs_bool srs_h264_is_duplicated_sps_error(int error_code);
+/**
+* whether error_code is duplicated pps error.
+* 
+* @see https://github.com/winlinvip/simple-rtmp-server/issues/204
+* @example /trunk/research/librtmp/srs_h264_raw_publish.c
+*/
+extern srs_bool srs_h264_is_duplicated_pps_error(int error_code);
+/**
+* whether h264 raw data starts with the annexb,
+* which bytes sequence matches N[00] 00 00 01, where N>=0.
+* @param h264_raw_data the input h264 raw data, a encoded h.264 I/P/B frame data.
+* @paam h264_raw_size the size of h264 raw data.
+* @param pnb_start_code output the size of start code, must >=3. 
+*       NULL to ignore.
+*
+* @reamrk used to check whether current frame is in annexb format.
+* @example /trunk/research/librtmp/srs_h264_raw_publish.c
+*
+* @return 0 false; otherwise, true.
+*/
+extern srs_bool srs_h264_startswith_annexb(
+    char* h264_raw_data, int h264_raw_size, 
+    int* pnb_start_code
+);
 
 /*************************************************************
 **************************************************************
@@ -5740,7 +5996,6 @@ extern const char* srs_format_time();
 **************************************************************
 *************************************************************/
 typedef void* srs_flv_t;
-typedef int srs_flv_bool;
 /* open flv file for both read/write. */
 extern srs_flv_t srs_flv_open_read(const char* file);
 extern srs_flv_t srs_flv_open_write(const char* file);
@@ -5815,20 +6070,20 @@ extern int64_t srs_flv_tellg(srs_flv_t flv);
 extern void srs_flv_lseek(srs_flv_t flv, int64_t offset);
 /* error code */
 /* whether the error code indicates EOF */
-extern srs_flv_bool srs_flv_is_eof(int error_code);
+extern srs_bool srs_flv_is_eof(int error_code);
 /* media codec */
 /**
 * whether the video body is sequence header 
 * @param data, the data of tag, read by srs_flv_read_tag_data().
 * @param size, the size of tag, read by srs_flv_read_tag_data().
 */
-extern srs_flv_bool srs_flv_is_sequence_header(char* data, int32_t size);
+extern srs_bool srs_flv_is_sequence_header(char* data, int32_t size);
 /**
 * whether the video body is keyframe 
 * @param data, the data of tag, read by srs_flv_read_tag_data().
 * @param size, the size of tag, read by srs_flv_read_tag_data().
 */
-extern srs_flv_bool srs_flv_is_keyframe(char* data, int32_t size);
+extern srs_bool srs_flv_is_keyframe(char* data, int32_t size);
 
 /*************************************************************
 **************************************************************
@@ -5839,8 +6094,12 @@ extern srs_flv_bool srs_flv_is_keyframe(char* data, int32_t size);
 *************************************************************/
 /* the output handler. */
 typedef void* srs_amf0_t;
-typedef int srs_amf0_bool;
 typedef double srs_amf0_number;
+/**
+* parse amf0 from data.
+* @param nparsed, the parsed size, NULL to ignore.
+* @return the parsed amf0 object. NULL for error.
+*/
 extern srs_amf0_t srs_amf0_parse(char* data, int size, int* nparsed);
 extern srs_amf0_t srs_amf0_create_number(srs_amf0_number value);
 extern srs_amf0_t srs_amf0_create_ecma_array();
@@ -5852,16 +6111,16 @@ extern void srs_amf0_free_bytes(char* data);
 extern int srs_amf0_size(srs_amf0_t amf0);
 extern int srs_amf0_serialize(srs_amf0_t amf0, char* data, int size);
 /* type detecter */
-extern srs_amf0_bool srs_amf0_is_string(srs_amf0_t amf0);
-extern srs_amf0_bool srs_amf0_is_boolean(srs_amf0_t amf0);
-extern srs_amf0_bool srs_amf0_is_number(srs_amf0_t amf0);
-extern srs_amf0_bool srs_amf0_is_null(srs_amf0_t amf0);
-extern srs_amf0_bool srs_amf0_is_object(srs_amf0_t amf0);
-extern srs_amf0_bool srs_amf0_is_ecma_array(srs_amf0_t amf0);
-extern srs_amf0_bool srs_amf0_is_strict_array(srs_amf0_t amf0);
+extern srs_bool srs_amf0_is_string(srs_amf0_t amf0);
+extern srs_bool srs_amf0_is_boolean(srs_amf0_t amf0);
+extern srs_bool srs_amf0_is_number(srs_amf0_t amf0);
+extern srs_bool srs_amf0_is_null(srs_amf0_t amf0);
+extern srs_bool srs_amf0_is_object(srs_amf0_t amf0);
+extern srs_bool srs_amf0_is_ecma_array(srs_amf0_t amf0);
+extern srs_bool srs_amf0_is_strict_array(srs_amf0_t amf0);
 /* value converter */
 extern const char* srs_amf0_to_string(srs_amf0_t amf0);
-extern srs_amf0_bool srs_amf0_to_boolean(srs_amf0_t amf0);
+extern srs_bool srs_amf0_to_boolean(srs_amf0_t amf0);
 extern srs_amf0_number srs_amf0_to_number(srs_amf0_t amf0);
 /* value setter */
 extern void srs_amf0_set_number(srs_amf0_t amf0, srs_amf0_number value);
@@ -5882,118 +6141,292 @@ extern void srs_amf0_ecma_array_property_set(srs_amf0_t amf0, const char* name, 
 extern int srs_amf0_strict_array_property_count(srs_amf0_t amf0);
 extern srs_amf0_t srs_amf0_strict_array_property_at(srs_amf0_t amf0, int index);
 extern void srs_amf0_strict_array_append(srs_amf0_t amf0, srs_amf0_t value);
+
+/*************************************************************
+**************************************************************
+* utilities
+**************************************************************
+*************************************************************/
+/**
+* get the current system time in ms.
+* use gettimeofday() to get system time.
+*/
+extern int64_t srs_utils_time_ms();
+
+/**
+* get the send bytes.
+*/
+extern int64_t srs_utils_send_bytes(srs_rtmp_t rtmp);
+
+/**
+* get the recv bytes.
+*/
+extern int64_t srs_utils_recv_bytes(srs_rtmp_t rtmp);
+
+/**
+* parse the dts and pts by time in header and data in tag,
+* or to parse the RTMP packet by srs_rtmp_read_packet().
+*
+* @param time, the timestamp of tag, read by srs_flv_read_tag_header().
+* @param type, the type of tag, read by srs_flv_read_tag_header().
+* @param data, the data of tag, read by srs_flv_read_tag_data().
+* @param size, the size of tag, read by srs_flv_read_tag_header().
+* @param ppts, output the pts in ms,
+*
+* @return 0, success; otherswise, failed.
+* @remark, the dts always equals to @param time.
+* @remark, the pts=dts for audio or data.
+* @remark, video only support h.264.
+*/
+extern int srs_utils_parse_timestamp(
+    u_int32_t time, char type, char* data, int size,
+    u_int32_t* ppts
+);
+
+/**
+* get the CodecID of video tag.
+* Codec Identifier. The following values are defined:
+*           2 = Sorenson H.263
+*           3 = Screen video
+*           4 = On2 VP6
+*           5 = On2 VP6 with alpha channel
+*           6 = Screen video version 2
+*           7 = AVC
+* @return the code id. 0 for error.
+*/
+extern char srs_utils_flv_video_codec_id(char* data, int size);
+
+/**
+* get the AVCPacketType of video tag.
+* The following values are defined:
+*           0 = AVC sequence header
+*           1 = AVC NALU
+*           2 = AVC end of sequence (lower level NALU sequence ender is
+*               not required or supported)
+* @return the avc packet type. -1(0xff) for error.
+*/
+extern char srs_utils_flv_video_avc_packet_type(char* data, int size);
+
+/**
+* get the FrameType of video tag.
+* Type of video frame. The following values are defined:
+*           1 = key frame (for AVC, a seekable frame)
+*           2 = inter frame (for AVC, a non-seekable frame)
+*           3 = disposable inter frame (H.263 only)
+*           4 = generated key frame (reserved for server use only)
+*           5 = video info/command frame
+* @return the frame type. 0 for error.
+*/
+extern char srs_utils_flv_video_frame_type(char* data, int size);
+
+/**
+* get the SoundFormat of audio tag.
+* Format of SoundData. The following values are defined:
+*               0 = Linear PCM, platform endian
+*               1 = ADPCM
+*               2 = MP3
+*               3 = Linear PCM, little endian
+*               4 = Nellymoser 16 kHz mono
+*               5 = Nellymoser 8 kHz mono
+*               6 = Nellymoser
+*               7 = G.711 A-law logarithmic PCM
+*               8 = G.711 mu-law logarithmic PCM
+*               9 = reserved
+*               10 = AAC
+*               11 = Speex
+*               14 = MP3 8 kHz
+*               15 = Device-specific sound
+*               Formats 7, 8, 14, and 15 are reserved.
+*               AAC is supported in Flash Player 9,0,115,0 and higher.
+*               Speex is supported in Flash Player 10 and higher.
+* @return the sound format. -1(0xff) for error.
+*/
+extern char srs_utils_flv_audio_sound_format(char* data, int size);
+
+/**
+* get the SoundRate of audio tag.
+* Sampling rate. The following values are defined:
+*               0 = 5.5 kHz
+*               1 = 11 kHz
+*               2 = 22 kHz
+*               3 = 44 kHz
+* @return the sound rate. -1(0xff) for error.
+*/
+extern char srs_utils_flv_audio_sound_rate(char* data, int size);
+
+/**
+* get the SoundSize of audio tag.
+* Size of each audio sample. This parameter only pertains to
+* uncompressed formats. Compressed formats always decode
+* to 16 bits internally.
+*               0 = 8-bit samples
+*               1 = 16-bit samples
+* @return the sound size. -1(0xff) for error.
+*/
+extern char srs_utils_flv_audio_sound_size(char* data, int size);
+
+/**
+* get the SoundType of audio tag.
+* Mono or stereo sound
+*               0 = Mono sound
+*               1 = Stereo sound
+* @return the sound type. -1(0xff) for error.
+*/
+extern char srs_utils_flv_audio_sound_type(char* data, int size);
+
+/**
+* get the AACPacketType of audio tag.
+* The following values are defined:
+*               0 = AAC sequence header
+*               1 = AAC raw
+* @return the aac packet type. -1(0xff) for error.
+*/
+extern char srs_utils_flv_audio_aac_packet_type(char* data, int size);
+
+/*************************************************************
+**************************************************************
+* human readable print.
+**************************************************************
+*************************************************************/
 /**
 * human readable print 
 * @param pdata, output the heap data, NULL to ignore.
 *       user must use srs_amf0_free_bytes to free it.
 * @return return the *pdata for print. NULL to ignore.
 */
-extern char* srs_amf0_human_print(srs_amf0_t amf0, char** pdata, int* psize);
+extern char* srs_human_amf0_print(srs_amf0_t amf0, char** pdata, int* psize);
+/**
+* convert the flv tag type to string.
+*     SRS_RTMP_TYPE_AUDIO to "Audio"
+*     SRS_RTMP_TYPE_VIDEO to "Video"
+*     SRS_RTMP_TYPE_SCRIPT to "Data"
+*     otherwise, "Unknown"
+* @remark user never free the return char*, 
+*   it's static shared const string.
+*/
+extern const char* srs_human_flv_tag_type2string(char type);
 
-/*************************************************************
-**************************************************************
-* h264 raw codec
-**************************************************************
-*************************************************************/
-typedef int srs_h264_bool;
 /**
-* write h.264 raw frame over RTMP to rtmp server.
-* @param frames the input h264 raw data, encoded h.264 I/P/B frames data.
-*       frames can be one or more than one frame,
-*       each frame prefixed h.264 annexb header, by N[00] 00 00 01, where N>=0, 
-*       for instance, frame = header(00 00 00 01) + payload(67 42 80 29 95 A0 14 01 6E 40)
-*       about annexb, @see H.264-AVC-ISO_IEC_14496-10.pdf, page 211.
-* @paam frames_size the size of h264 raw data. 
-*       assert frames_size > 0, at least has 1 bytes header.
-* @param dts the dts of h.264 raw data.
-* @param pts the pts of h.264 raw data.
-* 
-* @remark, user should free the frames.
-* @remark, the tbn of dts/pts is 1/1000 for RTMP, that is, in ms.
-* @remark, cts = pts - dts
-* @remark, use srs_h264_startswith_annexb to check whether frame is annexb format.
-* @example /trunk/research/librtmp/srs_h264_raw_publish.c
-* @see https://github.com/winlinvip/simple-rtmp-server/issues/66
-* 
-* @return 0, success; otherswise, failed.
-*       for dvbsp error, @see srs_h264_is_dvbsp_error().
-*       for duplictated sps error, @see srs_h264_is_duplicated_sps_error().
-*       for duplictated pps error, @see srs_h264_is_duplicated_pps_error().
+* get the codec id string.
+*           H.263 = Sorenson H.263
+*           Screen = Screen video
+*           VP6 = On2 VP6
+*           VP6Alpha = On2 VP6 with alpha channel
+*           Screen2 = Screen video version 2
+*           H.264 = AVC
+*           otherwise, "Unknown"
+* @remark user never free the return char*, 
+*   it's static shared const string.
 */
+extern const char* srs_human_flv_video_codec_id2string(char codec_id);
+
 /**
-For the example file: 
-    http://winlinvip.github.io/srs.release/3rdparty/720p.h264.raw
-The data sequence is:
-    // SPS
-    000000016742802995A014016E40
-    // PPS
-    0000000168CE3880
-    // IFrame
-    0000000165B8041014C038008B0D0D3A071.....
-    // PFrame
-    0000000141E02041F8CDDC562BBDEFAD2F.....
-User can send the SPS+PPS, then each frame:
-    // SPS+PPS
-    srs_h264_write_raw_frames('000000016742802995A014016E400000000168CE3880', size, dts, pts)
-    // IFrame
-    srs_h264_write_raw_frames('0000000165B8041014C038008B0D0D3A071......', size, dts, pts)
-    // PFrame
-    srs_h264_write_raw_frames('0000000141E02041F8CDDC562BBDEFAD2F......', size, dts, pts)
-User also can send one by one:
-    // SPS
-    srs_h264_write_raw_frames('000000016742802995A014016E4', size, dts, pts)
-    // PPS
-    srs_h264_write_raw_frames('00000000168CE3880', size, dts, pts)
-    // IFrame
-    srs_h264_write_raw_frames('0000000165B8041014C038008B0D0D3A071......', size, dts, pts)
-    // PFrame
-    srs_h264_write_raw_frames('0000000141E02041F8CDDC562BBDEFAD2F......', size, dts, pts) 
+* get the avc packet type string.
+*           SH = AVC sequence header
+*           Nalu = AVC NALU
+*           SpsPpsEnd = AVC end of sequence
+*           otherwise, "Unknown"
+* @remark user never free the return char*, 
+*   it's static shared const string.
 */
-extern int srs_h264_write_raw_frames(srs_rtmp_t rtmp, 
-    char* frames, int frames_size, u_int32_t dts, u_int32_t pts
-);
+extern const char* srs_human_flv_video_avc_packet_type2string(char avc_packet_type);
+
 /**
-* whether error_code is dvbsp(drop video before sps/pps/sequence-header) error.
-*
-* @see https://github.com/winlinvip/simple-rtmp-server/issues/203
-* @example /trunk/research/librtmp/srs_h264_raw_publish.c
-* @remark why drop video?
-*       some encoder, for example, ipcamera, will send sps/pps before each IFrame,
-*       so, when error and reconnect the rtmp, the first video is not sps/pps(sequence header),
-*       this will cause SRS server to disable HLS.
+* get the frame type string.
+*           I = key frame (for AVC, a seekable frame)
+*           P/B = inter frame (for AVC, a non-seekable frame)
+*           DI = disposable inter frame (H.263 only)
+*           GI = generated key frame (reserved for server use only)
+*           VI = video info/command frame
+*           otherwise, "Unknown"
+* @remark user never free the return char*, 
+*   it's static shared const string.
 */
-extern srs_h264_bool srs_h264_is_dvbsp_error(int error_code);
+extern const char* srs_human_flv_video_frame_type2string(char frame_type);
+
 /**
-* whether error_code is duplicated sps error.
-* 
-* @see https://github.com/winlinvip/simple-rtmp-server/issues/204
-* @example /trunk/research/librtmp/srs_h264_raw_publish.c
+* get the SoundFormat string.
+* Format of SoundData. The following values are defined:
+*               LinearPCM = Linear PCM, platform endian
+*               ADPCM = ADPCM
+*               MP3 = MP3
+*               LinearPCMLe = Linear PCM, little endian
+*               NellymoserKHz16 = Nellymoser 16 kHz mono
+*               NellymoserKHz8 = Nellymoser 8 kHz mono
+*               Nellymoser = Nellymoser
+*               G711APCM = G.711 A-law logarithmic PCM
+*               G711MuPCM = G.711 mu-law logarithmic PCM
+*               Reserved = reserved
+*               AAC = AAC
+*               Speex = Speex
+*               MP3KHz8 = MP3 8 kHz
+*               DeviceSpecific = Device-specific sound
+*               otherwise, "Unknown"
+* @remark user never free the return char*, 
+*   it's static shared const string.
 */
-extern srs_h264_bool srs_h264_is_duplicated_sps_error(int error_code);
+extern const char* srs_human_flv_audio_sound_format2string(char sound_format);
+
 /**
-* whether error_code is duplicated pps error.
-* 
-* @see https://github.com/winlinvip/simple-rtmp-server/issues/204
-* @example /trunk/research/librtmp/srs_h264_raw_publish.c
+* get the SoundRate of audio tag.
+* Sampling rate. The following values are defined:
+*               5.5KHz = 5.5 kHz
+*               11KHz = 11 kHz
+*               22KHz = 22 kHz
+*               44KHz = 44 kHz
+*               otherwise, "Unknown"
+* @remark user never free the return char*, 
+*   it's static shared const string.
 */
-extern srs_h264_bool srs_h264_is_duplicated_pps_error(int error_code);
+extern const char* srs_human_flv_audio_sound_rate2string(char sound_rate);
+
 /**
-* whether h264 raw data starts with the annexb,
-* which bytes sequence matches N[00] 00 00 01, where N>=0.
-* @param h264_raw_data the input h264 raw data, a encoded h.264 I/P/B frame data.
-* @paam h264_raw_size the size of h264 raw data.
-* @param pnb_start_code output the size of start code, must >=3. 
-*       NULL to ignore.
-*
-* @reamrk used to check whether current frame is in annexb format.
-* @example /trunk/research/librtmp/srs_h264_raw_publish.c
-*
-* @return 0 false; otherwise, true.
+* get the SoundSize of audio tag.
+* Size of each audio sample. This parameter only pertains to
+* uncompressed formats. Compressed formats always decode
+* to 16 bits internally.
+*               8bit = 8-bit samples
+*               16bit = 16-bit samples
+*               otherwise, "Unknown"
+* @remark user never free the return char*, 
+*   it's static shared const string.
 */
-extern int srs_h264_startswith_annexb(
-    char* h264_raw_data, int h264_raw_size, 
-    int* pnb_start_code
-);
+extern const char* srs_human_flv_audio_sound_size2string(char sound_size);
+
+/**
+* get the SoundType of audio tag.
+* Mono or stereo sound
+*               Mono = Mono sound
+*               Stereo = Stereo sound
+*               otherwise, "Unknown"
+* @remark user never free the return char*, 
+*   it's static shared const string.
+*/
+extern const char* srs_human_flv_audio_sound_type2string(char sound_type);
+
+/**
+* get the AACPacketType of audio tag.
+* The following values are defined:
+*               SH = AAC sequence header
+*               Raw = AAC raw
+*               otherwise, "Unknown"
+* @remark user never free the return char*, 
+*   it's static shared const string.
+*/
+extern const char* srs_human_flv_audio_aac_packet_type2string(char aac_packet_type);
+
+/**
+* print the rtmp packet, use srs_human_trace/srs_human_verbose for packet,
+* and use srs_human_raw for script data body.
+* @return an error code for parse the timetstamp to dts and pts.
+*/
+extern int srs_human_print_rtmp_packet(char type, u_int32_t timestamp, char* data, int size);
+
+// log to console, for use srs-librtmp application.
+extern const char* srs_human_format_time();
+#define srs_human_trace(msg, ...) printf("[%s] ", srs_human_format_time());printf(msg, ##__VA_ARGS__);printf("\n")
+#define srs_human_verbose(msg, ...) printf("[%s] ", srs_human_format_time());printf(msg, ##__VA_ARGS__);printf("\n")
+#define srs_human_raw(msg, ...) printf(msg, ##__VA_ARGS__)
 
 #ifdef __cplusplus
 }
@@ -6035,6 +6468,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //#include <srs_core.hpp>
 
 //#include <srs_protocol_io.hpp>
+//#include <srs_librtmp.hpp>
     
 /**
 * simple socket stream,
@@ -6047,7 +6481,7 @@ private:
     int64_t send_timeout;
     int64_t recv_bytes;
     int64_t send_bytes;
-    int fd;
+    SOCKET fd;
 public:
     SimpleSocketStream();
     virtual ~SimpleSocketStream();
@@ -10195,6 +10629,7 @@ SrsProtocol::SrsProtocol(ISrsProtocolReaderWriter* io)
     srs_assert(nb_out_iovs >= 2);
     
     warned_c0c3_cache_dry = false;
+    auto_response_when_recv = true;
 }
 
 SrsProtocol::~SrsProtocol()
@@ -10210,6 +10645,15 @@ SrsProtocol::~SrsProtocol()
         chunk_streams.clear();
     }
     
+    if (true) {
+        std::vector<SrsPacket*>::iterator it;
+        for (it = manual_response_queue.begin(); it != manual_response_queue.end(); ++it) {
+            SrsPacket* pkt = *it;
+            srs_freep(pkt);
+        }
+        manual_response_queue.clear();
+    }
+    
     srs_freep(in_buffer);
     
     // alloc by malloc, use free directly.
@@ -10217,6 +10661,35 @@ SrsProtocol::~SrsProtocol()
         free(out_iovs);
         out_iovs = NULL;
     }
+}
+
+void SrsProtocol::set_auto_response(bool v)
+{
+    auto_response_when_recv = v;
+}
+
+int SrsProtocol::manual_response_flush()
+{
+    int ret = ERROR_SUCCESS;
+    
+    if (manual_response_queue.empty()) {
+        return ret;
+    }
+    
+    std::vector<SrsPacket*>::iterator it;
+    for (it = manual_response_queue.begin(); it != manual_response_queue.end();) {
+        SrsPacket* pkt = *it;
+        
+        // erase this packet, the send api always free it.
+        it = manual_response_queue.erase(it);
+        
+        // use underlayer api to send, donot flush again.
+        if ((ret = do_send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
+            return ret;
+        }
+    }
+    
+    return ret;
 }
 
 void SrsProtocol::set_recv_timeout(int64_t timeout_us)
@@ -10418,7 +10891,9 @@ int SrsProtocol::do_send_messages(SrsMessage** msgs, int nb_msgs)
                 // when c0c3 cache dry,
                 // sendout all messages and reset the cache, then send again.
                 if ((ret = skt->writev(out_iovs, iov_index, NULL)) != ERROR_SUCCESS) {
-                    srs_error("send with writev failed. ret=%d", ret);
+                    if (!srs_is_client_gracefully_close(ret)) {
+                        srs_error("send with writev failed. ret=%d", ret);
+                    }
                     return ret;
                 }
     
@@ -10443,9 +10918,53 @@ int SrsProtocol::do_send_messages(SrsMessage** msgs, int nb_msgs)
     // sendout header and payload by writev.
     // decrease the sys invoke count to get higher performance.
     if ((ret = skt->writev(out_iovs, iov_index, NULL)) != ERROR_SUCCESS) {
-        srs_error("send with writev failed. ret=%d", ret);
+        if (!srs_is_client_gracefully_close(ret)) {
+            srs_error("send with writev failed. ret=%d", ret);
+        }
         return ret;
     }
+    
+    return ret;
+}
+
+int SrsProtocol::do_send_and_free_packet(SrsPacket* packet, int stream_id)
+{
+    int ret = ERROR_SUCCESS;
+    
+    srs_assert(packet);
+    SrsAutoFree(SrsPacket, packet);
+    
+    int size = 0;
+    char* payload = NULL;
+    if ((ret = packet->encode(size, payload)) != ERROR_SUCCESS) {
+        srs_error("encode RTMP packet to bytes oriented RTMP message failed. ret=%d", ret);
+        return ret;
+    }
+    
+    // encode packet to payload and size.
+    if (size <= 0 || payload == NULL) {
+        srs_warn("packet is empty, ignore empty message.");
+        return ret;
+    }
+    
+    // to message
+    SrsMessage* msg = new SrsCommonMessage();
+    
+    msg->payload = payload;
+    msg->size = size;
+    
+    msg->header.payload_length = size;
+    msg->header.message_type = packet->get_message_type();
+    msg->header.stream_id = stream_id;
+    msg->header.perfer_cid = packet->get_prefer_cid();
+
+    // donot use the auto free to free the msg,
+    // for performance issue.
+    ret = do_send_messages(&msg, 1);
+    if (ret == ERROR_SUCCESS) {
+        ret = on_send_packet(msg, packet);
+    }
+    srs_freep(msg);
     
     return ret;
 }
@@ -10728,6 +11247,16 @@ int SrsProtocol::send_and_free_messages(SrsMessage** msgs, int nb_msgs, int stre
         srs_freep(msg);
     }
     
+    // donot flush when send failed
+    if (ret != ERROR_SUCCESS) {
+        return ret;
+    }
+    
+    // flush messages in manual queue
+    if ((ret = manual_response_flush()) != ERROR_SUCCESS) {
+        return ret;
+    }
+    
     return ret;
 }
 
@@ -10735,40 +11264,14 @@ int SrsProtocol::send_and_free_packet(SrsPacket* packet, int stream_id)
 {
     int ret = ERROR_SUCCESS;
     
-    srs_assert(packet);
-    SrsAutoFree(SrsPacket, packet);
-    
-    int size = 0;
-    char* payload = NULL;
-    if ((ret = packet->encode(size, payload)) != ERROR_SUCCESS) {
-        srs_error("encode RTMP packet to bytes oriented RTMP message failed. ret=%d", ret);
+    if ((ret = do_send_and_free_packet(packet, stream_id)) != ERROR_SUCCESS) {
         return ret;
     }
     
-    // encode packet to payload and size.
-    if (size <= 0 || payload == NULL) {
-        srs_warn("packet is empty, ignore empty message.");
+    // flush messages in manual queue
+    if ((ret = manual_response_flush()) != ERROR_SUCCESS) {
         return ret;
     }
-    
-    // to message
-    SrsMessage* msg = new SrsCommonMessage();
-    
-    msg->payload = payload;
-    msg->size = size;
-    
-    msg->header.payload_length = size;
-    msg->header.message_type = packet->get_message_type();
-    msg->header.stream_id = stream_id;
-    msg->header.perfer_cid = packet->get_prefer_cid();
-
-    // donot use the auto free to free the msg,
-    // for performance issue.
-    ret = do_send_messages(&msg, 1);
-    if (ret == ERROR_SUCCESS) {
-        ret = on_send_packet(msg, packet);
-    }
-    srs_freep(msg);
     
     return ret;
 }
@@ -11478,7 +11981,15 @@ int SrsProtocol::response_acknowledgement_message()
     SrsAcknowledgementPacket* pkt = new SrsAcknowledgementPacket();
     in_ack_size.acked_size = skt->get_recv_bytes();
     pkt->sequence_number = (int32_t)in_ack_size.acked_size;
-    if ((ret = send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
+    
+    // cache the message and use flush to send.
+    if (!auto_response_when_recv) {
+        manual_response_queue.push_back(pkt);
+        return ret;
+    }
+    
+    // use underlayer api to send, donot flush again.
+    if ((ret = do_send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
         srs_error("send acknowledgement failed. ret=%d", ret);
         return ret;
     }
@@ -11498,7 +12009,14 @@ int SrsProtocol::response_ping_message(int32_t timestamp)
     pkt->event_type = SrcPCUCPingResponse;
     pkt->event_data = timestamp;
     
-    if ((ret = send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
+    // cache the message and use flush to send.
+    if (!auto_response_when_recv) {
+        manual_response_queue.push_back(pkt);
+        return ret;
+    }
+    
+    // use underlayer api to send, donot flush again.
+    if ((ret = do_send_and_free_packet(pkt, 0)) != ERROR_SUCCESS) {
         srs_error("send ping response failed. ret=%d", ret);
         return ret;
     }
@@ -14246,20 +14764,22 @@ int SrsRtmpClient::connect_app(string app, string tc_url,
 {
     std::string srs_server_ip;
     std::string srs_server;
-    std::string srs_primary_authors;
+    std::string srs_primary;
+    std::string srs_authors;
     std::string srs_version;
     int srs_id = 0;
     int srs_pid = 0;
     
     return connect_app2(app, tc_url, req, debug_srs_upnode,
-        srs_server_ip, srs_server, srs_primary_authors, 
+        srs_server_ip, srs_server, srs_primary, srs_authors,
         srs_version, srs_id, srs_pid);
 }
 
 int SrsRtmpClient::connect_app2(
     string app, string tc_url, SrsRequest* req, bool debug_srs_upnode,
-    string& srs_server_ip, string& srs_server, string& srs_primary_authors, 
-    string& srs_version, int& srs_id, int& srs_pid
+    string& srs_server_ip, string& srs_server, string& srs_primary, 
+    string& srs_authors, string& srs_version, int& srs_id, 
+    int& srs_pid
 ){
     int ret = ERROR_SUCCESS;
     
@@ -14324,8 +14844,11 @@ int SrsRtmpClient::connect_app2(
         SrsAmf0EcmaArray* arr = data->to_ecma_array();
         
         SrsAmf0Any* prop = NULL;
-        if ((prop = arr->ensure_property_string("srs_primary_authors")) != NULL) {
-            srs_primary_authors = prop->to_str();
+        if ((prop = arr->ensure_property_string("srs_primary")) != NULL) {
+            srs_primary = prop->to_str();
+        }
+        if ((prop = arr->ensure_property_string("srs_authors")) != NULL) {
+            srs_authors = prop->to_str();
         }
         if ((prop = arr->ensure_property_string("srs_version")) != NULL) {
             srs_version = prop->to_str();
@@ -14537,6 +15060,11 @@ SrsRtmpServer::~SrsRtmpServer()
     srs_freep(hs_bytes);
 }
 
+void SrsRtmpServer::set_auto_response(bool v)
+{
+    protocol->set_auto_response(v);
+}
+
 void SrsRtmpServer::set_recv_timeout(int64_t timeout_us)
 {
     protocol->set_recv_timeout(timeout_us);
@@ -14724,7 +15252,8 @@ int SrsRtmpServer::response_connect_app(SrsRequest *req, const char* server_ip)
     data->set("srs_site", SrsAmf0Any::str(RTMP_SIG_SRS_WEB));
     data->set("srs_email", SrsAmf0Any::str(RTMP_SIG_SRS_EMAIL));
     data->set("srs_copyright", SrsAmf0Any::str(RTMP_SIG_SRS_COPYRIGHT));
-    data->set("srs_primary_authors", SrsAmf0Any::str(RTMP_SIG_SRS_PRIMARY_AUTHROS));
+    data->set("srs_primary", SrsAmf0Any::str(RTMP_SIG_SRS_PRIMARY));
+    data->set("srs_authors", SrsAmf0Any::str(RTMP_SIG_SRS_AUTHROS));
     
     if (server_ip) {
         data->set("srs_server_ip", SrsAmf0Any::str(server_ip));
@@ -16798,12 +17327,12 @@ bool srs_avc_startswith_annexb(SrsStream* stream, int* pnb_start_code)
         }
         
         // not match
-        if (p[0] != 0x00 || p[1] != 0x00) {
+        if (p[0] != (char)0x00 || p[1] != (char)0x00) {
             return false;
         }
         
         // match N[00] 00 00 01, where N>=0
-        if (p[2] == 0x01) {
+        if (p[2] == (char)0x01) {
             if (pnb_start_code) {
                 *pnb_start_code = (int)(p - bytes) + 3;
             }
@@ -16814,6 +17343,24 @@ bool srs_avc_startswith_annexb(SrsStream* stream, int* pnb_start_code)
     }
     
     return false;
+}
+
+bool srs_aac_startswith_adts(SrsStream* stream)
+{
+    char* bytes = stream->data() + stream->pos();
+    char* p = bytes;
+    
+    if (!stream->require(p - bytes + 2)) {
+        return false;
+    }
+    
+    // matched 12bits 0xFFF,
+    // @remark, we must cast the 0xff to char to compare.
+    if (p[0] != (char)0xff || (char)(p[1] & 0xf0) != (char)0xf0) {
+        return false;
+    }
+    
+    return true;
 }
 
 // following is generated by src/rtmp/srs_protocol_msg_array.cpp
@@ -16944,7 +17491,7 @@ struct Context
     int stream_id;
     
     // for h264 raw stream, 
-    // see: https://github.com/winlinvip/simple-rtmp-server/issues/66#issuecomment-62240521
+    // @see: https://github.com/winlinvip/simple-rtmp-server/issues/66#issuecomment-62240521
     SrsStream h264_raw_stream;
     // about SPS, @see: 7.3.2.1.1, H.264-AVC-ISO_IEC_14496-10-2012.pdf, page 62
     std::string h264_sps;
@@ -16956,6 +17503,11 @@ struct Context
     // @see https://github.com/winlinvip/simple-rtmp-server/issues/204
     bool h264_sps_changed;
     bool h264_pps_changed;
+    // for aac raw stream,
+    // @see: https://github.com/winlinvip/simple-rtmp-server/issues/212#issuecomment-64146250
+    SrsStream aac_raw_stream;
+    // the aac sequence header.
+    std::string aac_specific_config;
     
     Context() {
         rtmp = NULL;
@@ -16997,47 +17549,29 @@ struct Context
         return 0;
     }
     
-    int open(const char *pathname, int flags)
+    int socket_setup()
     {
-        return open(pathname, flags, 0);
-    }
+        WORD wVersionRequested;
+        WSADATA wsaData;
+        int err;
     
-    int open(const char *pathname, int flags, mode_t mode)
-    {
-        FILE* file = NULL;
+        /* Use the MAKEWORD(lowbyte, highbyte) macro declared in Windef.h */
+        wVersionRequested = MAKEWORD(2, 2);
     
-        if ((flags & O_RDONLY) == O_RDONLY) {
-            file = fopen(pathname, "r");
-        } else {
-            file = fopen(pathname, "w+");
-        }
-    
-        if (file == NULL) {
+        err = WSAStartup(wVersionRequested, &wsaData);
+        if (err != 0) {
+            /* Tell the user that we could not find a usable */
+            /* Winsock DLL.                                  */
+            //printf("WSAStartup failed with error: %d\n", err);
             return -1;
         }
-    
-        return (int)file;
+        return 0;
     }
     
-    int close(int fd)
+    int socket_cleanup()
     {
-        FILE* file = (FILE*)fd;
-        return fclose(file);
-    }
-    
-    off_t lseek(int fd, off_t offset, int whence)
-    {
-        return (off_t)fseek((FILE*)fd, offset, whence);
-    }
-    
-    ssize_t write(int fd, const void *buf, size_t count)
-    {
-        return (ssize_t)fwrite(buf, count, 1, (FILE*)fd);
-    }
-    
-    ssize_t read(int fd, void *buf, size_t count)
-    {
-        return (ssize_t)fread(buf, count, 1, (FILE*)fd);
+        WSACleanup();
+        return 0;
     }
     
     pid_t getpid(void)
@@ -17383,6 +17917,21 @@ int srs_librtmp_context_connect(Context* context)
 extern "C"{
 #endif
 
+int srs_version_major()
+{
+    return VERSION_MAJOR;
+}
+
+int srs_version_minor()
+{
+    return VERSION_MINOR;
+}
+
+int srs_version_revision()
+{
+    return VERSION_REVISION;
+}
+
 srs_rtmp_t srs_rtmp_create(const char* url)
 {
     Context* context = new Context();
@@ -17410,26 +17959,26 @@ void srs_rtmp_destroy(srs_rtmp_t rtmp)
     srs_freep(context);
 }
 
-int srs_simple_handshake(srs_rtmp_t rtmp)
+int srs_rtmp_handshake(srs_rtmp_t rtmp)
 {
     int ret = ERROR_SUCCESS;
     
-    if ((ret = __srs_dns_resolve(rtmp)) != ERROR_SUCCESS) {
+    if ((ret = __srs_rtmp_dns_resolve(rtmp)) != ERROR_SUCCESS) {
         return ret;
     }
     
-    if ((ret = __srs_connect_server(rtmp)) != ERROR_SUCCESS) {
+    if ((ret = __srs_rtmp_connect_server(rtmp)) != ERROR_SUCCESS) {
         return ret;
     }
     
-    if ((ret = __srs_do_simple_handshake(rtmp)) != ERROR_SUCCESS) {
+    if ((ret = __srs_rtmp_do_simple_handshake(rtmp)) != ERROR_SUCCESS) {
         return ret;
     }
     
     return ret;
 }
 
-int __srs_dns_resolve(srs_rtmp_t rtmp)
+int __srs_rtmp_dns_resolve(srs_rtmp_t rtmp)
 {
     int ret = ERROR_SUCCESS;
     
@@ -17448,7 +17997,7 @@ int __srs_dns_resolve(srs_rtmp_t rtmp)
     return ret;
 }
 
-int __srs_connect_server(srs_rtmp_t rtmp)
+int __srs_rtmp_connect_server(srs_rtmp_t rtmp)
 {
     int ret = ERROR_SUCCESS;
     
@@ -17462,7 +18011,7 @@ int __srs_connect_server(srs_rtmp_t rtmp)
     return ret;
 }
 
-int __srs_do_simple_handshake(srs_rtmp_t rtmp)
+int __srs_rtmp_do_simple_handshake(srs_rtmp_t rtmp)
 {
     int ret = ERROR_SUCCESS;
     
@@ -17482,7 +18031,7 @@ int __srs_do_simple_handshake(srs_rtmp_t rtmp)
     return ret;
 }
 
-int srs_connect_app(srs_rtmp_t rtmp)
+int srs_rtmp_connect_app(srs_rtmp_t rtmp)
 {
     int ret = ERROR_SUCCESS;
     
@@ -17503,13 +18052,15 @@ int srs_connect_app(srs_rtmp_t rtmp)
     return ret;
 }
 
-int srs_connect_app2(srs_rtmp_t rtmp,
-    char srs_server_ip[128],char srs_server[128], char srs_primary_authors[128], 
+int srs_rtmp_connect_app2(srs_rtmp_t rtmp,
+    char srs_server_ip[128],char srs_server[128], 
+    char srs_primary[128], char srs_authors[128], 
     char srs_version[32], int* srs_id, int* srs_pid
 ) {
     srs_server_ip[0] = 0;
     srs_server[0] = 0;
-    srs_primary_authors[0] = 0;
+    srs_primary[0] = 0;
+    srs_authors[0] = 0;
     srs_version[0] = 0;
     *srs_id = 0;
     *srs_pid = 0;
@@ -17524,22 +18075,23 @@ int srs_connect_app2(srs_rtmp_t rtmp,
         context->param
     );
     
-    std::string sip, sserver, sauthors, sversion;
+    std::string sip, sserver, sprimary, sauthors, sversion;
     
     if ((ret = context->rtmp->connect_app2(context->app, tcUrl, NULL, true,
-        sip, sserver, sauthors, sversion, *srs_id, *srs_pid)) != ERROR_SUCCESS) {
+        sip, sserver, sprimary, sauthors, sversion, *srs_id, *srs_pid)) != ERROR_SUCCESS) {
         return ret;
     }
     
     snprintf(srs_server_ip, 128, "%s", sip.c_str());
     snprintf(srs_server, 128, "%s", sserver.c_str());
-    snprintf(srs_primary_authors, 128, "%s", sauthors.c_str());
+    snprintf(srs_primary, 128, "%s", sprimary.c_str());
+    snprintf(srs_authors, 128, "%s", sauthors.c_str());
     snprintf(srs_version, 32, "%s", sversion.c_str());
     
     return ret;
 }
 
-int srs_play_stream(srs_rtmp_t rtmp)
+int srs_rtmp_play_stream(srs_rtmp_t rtmp)
 {
     int ret = ERROR_SUCCESS;
     
@@ -17556,7 +18108,7 @@ int srs_play_stream(srs_rtmp_t rtmp)
     return ret;
 }
 
-int srs_publish_stream(srs_rtmp_t rtmp)
+int srs_rtmp_publish_stream(srs_rtmp_t rtmp)
 {
     int ret = ERROR_SUCCESS;
     
@@ -17570,24 +18122,7 @@ int srs_publish_stream(srs_rtmp_t rtmp)
     return ret;
 }
 
-const char* srs_type2string(char type)
-{
-    static const char* audio = "Audio";
-    static const char* video = "Video";
-    static const char* data = "Data";
-    static const char* unknown = "Unknown";
-    
-    switch (type) {
-        case SRS_RTMP_TYPE_AUDIO: return audio;
-        case SRS_RTMP_TYPE_VIDEO: return video;
-        case SRS_RTMP_TYPE_SCRIPT: return data;
-        default: return unknown;
-    }
-    
-    return unknown;
-}
-
-int srs_bandwidth_check(srs_rtmp_t rtmp, 
+int srs_rtmp_bandwidth_check(srs_rtmp_t rtmp, 
     int64_t* start_time, int64_t* end_time, 
     int* play_kbps, int* publish_kbps,
     int* play_bytes, int* publish_bytes,
@@ -17623,7 +18158,7 @@ int srs_bandwidth_check(srs_rtmp_t rtmp,
     return ret;
 }
 
-int srs_read_packet(srs_rtmp_t rtmp, char* type, u_int32_t* timestamp, char** data, int* size)
+int srs_rtmp_read_packet(srs_rtmp_t rtmp, char* type, u_int32_t* timestamp, char** data, int* size)
 {
     *type = 0;
     *timestamp = 0;
@@ -17678,7 +18213,7 @@ int srs_read_packet(srs_rtmp_t rtmp, char* type, u_int32_t* timestamp, char** da
     return ret;
 }
 
-int srs_write_packet(srs_rtmp_t rtmp, char type, u_int32_t timestamp, char* data, int size)
+int srs_rtmp_write_packet(srs_rtmp_t rtmp, char type, u_int32_t timestamp, char* data, int size)
 {
     int ret = ERROR_SUCCESS;
     
@@ -17729,582 +18264,310 @@ int srs_write_packet(srs_rtmp_t rtmp, char type, u_int32_t timestamp, char* data
     return ret;
 }
 
-int srs_version_major()
-{
-    return VERSION_MAJOR;
+/**
+* directly write a audio frame.
+*/
+int __srs_write_audio_raw_frame(Context* context,
+    char sound_format, char sound_rate, char sound_size, char sound_type,
+    char aac_packet_type, char* frame, int frame_size, u_int32_t timestamp
+) {
+    
+    // for audio frame, there is 1 or 2 bytes header:
+    //      1bytes, SoundFormat|SoundRate|SoundSize|SoundType
+    //      1bytes, AACPacketType for SoundFormat == 10, 0 is sequence header.
+    int size = frame_size + 1;
+    if (sound_format == SrsCodecAudioAAC) {
+        size += 1;
+    }
+    char* data = new char[size];
+    char* p = data;
+    
+    u_int8_t audio_header = sound_type & 0x01;
+    audio_header |= (sound_size << 1) & 0x02;
+    audio_header |= (sound_rate << 2) & 0x0c;
+    audio_header |= (sound_format << 4) & 0xf0;
+    
+    *p++ = audio_header;
+    
+    if (sound_format == SrsCodecAudioAAC) {
+        *p++ = aac_packet_type;
+    }
+    
+    memcpy(p, frame, frame_size);
+    
+    return srs_rtmp_write_packet(context, SRS_RTMP_TYPE_AUDIO, timestamp, data, size);
 }
 
-int srs_version_minor()
-{
-    return VERSION_MINOR;
-}
-
-int srs_version_revision()
-{
-    return VERSION_REVISION;
-}
-
-int64_t srs_get_time_ms()
-{
-    srs_update_system_time_ms();
-    return srs_get_system_time_ms();
-}
-
-int64_t srs_get_nsend_bytes(srs_rtmp_t rtmp)
-{
-    srs_assert(rtmp != NULL);
-    Context* context = (Context*)rtmp;
-    return context->rtmp->get_send_bytes();
-}
-
-int64_t srs_get_nrecv_bytes(srs_rtmp_t rtmp)
-{
-    srs_assert(rtmp != NULL);
-    Context* context = (Context*)rtmp;
-    return context->rtmp->get_recv_bytes();
-}
-
-int srs_parse_timestamp(
-    u_int32_t time, char type, char* data, int size,
-    u_int32_t* ppts
+/**
+* write aac frame in adts.
+*/
+int __srs_write_aac_adts_frame(Context* context,
+    char sound_format, char sound_rate, char sound_size, char sound_type,
+    char aac_profile, char aac_samplerate, char aac_channel,
+    char* frame, int frame_size, u_int32_t timestamp
 ) {
     int ret = ERROR_SUCCESS;
     
-    if (type != SRS_RTMP_TYPE_VIDEO) {
-        *ppts = time;
-        return ret;
-    }
-
-    if (!SrsFlvCodec::video_is_h264(data, size)) {
-        return ERROR_FLV_INVALID_VIDEO_TAG;
-    }
-
-    if (SrsFlvCodec::video_is_sequence_header(data, size)) {
-        *ppts = time;
-        return ret;
-    }
-    
-    // 1bytes, frame type and codec id.
-    // 1bytes, avc packet type.
-    // 3bytes, cts, composition time,
-    //      pts = dts + cts, or 
-    //      cts = pts - dts.
-    if (size < 5) {
-        return ERROR_FLV_INVALID_VIDEO_TAG;
+    // override the aac samplerate by user specified.
+    // @see https://github.com/winlinvip/simple-rtmp-server/issues/212#issuecomment-64146899
+    switch (sound_rate) {
+        case SrsCodecAudioSampleRate11025: 
+            aac_samplerate = 0x0a; break;
+        case SrsCodecAudioSampleRate22050: 
+            aac_samplerate = 0x07; break;
+        case SrsCodecAudioSampleRate44100: 
+            aac_samplerate = 0x04; break;
+        default:
+            break;
     }
     
-    u_int32_t cts = 0;
-    char* p = data + 2;
-    char* pp = (char*)&cts;
-    pp[2] = *p++;
-    pp[1] = *p++;
-    pp[0] = *p++;
-
-    *ppts = time + cts;
-    
-    return ret;
-}
-
-const char* srs_format_time()
-{
-    struct timeval tv;
-    static char buf[23];
-    
-    memset(buf, 0, sizeof(buf));
-    
-    // clock time
-    if (gettimeofday(&tv, NULL) == -1) {
-        return buf;
-    }
-    
-    // to calendar time
-    struct tm* tm;
-    if ((tm = localtime((const time_t*)&tv.tv_sec)) == NULL) {
-        return buf;
-    }
-    
-    snprintf(buf, sizeof(buf), 
-        "%d-%02d-%02d %02d:%02d:%02d.%03d", 
-        1900 + tm->tm_year, 1 + tm->tm_mon, tm->tm_mday, 
-        tm->tm_hour, tm->tm_min, tm->tm_sec, 
-        (int)(tv.tv_usec / 1000));
+    // send out aac sequence header if not sent.
+    if (context->aac_specific_config.empty()) {
+        char ch = 0;
+        // @see aac-mp4a-format-ISO_IEC_14496-3+2001.pdf
+        // AudioSpecificConfig (), page 33
+        // 1.6.2.1 AudioSpecificConfig
+        // audioObjectType; 5 bslbf
+        ch = (aac_profile << 3) & 0xf8;
+        // 3bits left.
         
-    // for srs-librtmp, @see https://github.com/winlinvip/simple-rtmp-server/issues/213
-    buf[sizeof(buf) - 1] = 0;
+        // samplingFrequencyIndex; 4 bslbf
+        ch |= (aac_samplerate >> 1) & 0x07;
+        context->aac_specific_config += ch;
+        ch = (aac_samplerate << 7) & 0x80;
+        if (aac_samplerate == 0x0f) {
+            return ERROR_AAC_DATA_INVALID;
+        }
+        // 7bits left.
+        
+        // channelConfiguration; 4 bslbf
+        ch |= (aac_channel << 3) & 0x70;
+        // 3bits left.
+        
+        // only support aac profile 1-4.
+        if (aac_profile < 1 || aac_profile > 4) {
+            return ERROR_AAC_DATA_INVALID;
+        }
+        // GASpecificConfig(), page 451
+        // 4.4.1 Decoder configuration (GASpecificConfig)
+        // frameLengthFlag; 1 bslbf
+        // dependsOnCoreCoder; 1 bslbf
+        // extensionFlag; 1 bslbf
+        context->aac_specific_config += ch;
+        
+        if ((ret = __srs_write_audio_raw_frame(context, 
+            sound_format, sound_rate, sound_size, sound_type, 
+            0, (char*)context->aac_specific_config.data(), 
+            context->aac_specific_config.length(), 
+            timestamp)) != ERROR_SUCCESS
+        ) {
+            return ret;
+        }
+    }
     
-    return buf;
+    return __srs_write_audio_raw_frame(context, 
+        sound_format, sound_rate, sound_size, sound_type, 
+        1, frame, frame_size, timestamp);
 }
 
-struct FlvContext
-{
-    SrsFileReader reader;
-    SrsFileWriter writer;
-    SrsFlvEncoder enc;
-    SrsFlvDecoder dec;
-};
-
-srs_flv_t srs_flv_open_read(const char* file)
-{
+/**
+* write aac frames in adts.
+*/
+int __srs_write_aac_adts_frames(Context* context,
+    char sound_format, char sound_rate, char sound_size, char sound_type,
+    char* frame, int frame_size, u_int32_t timestamp
+) {
     int ret = ERROR_SUCCESS;
     
-    FlvContext* flv = new FlvContext();
-    
-    if ((ret = flv->reader.open(file)) != ERROR_SUCCESS) {
-        srs_freep(flv);
-        return NULL;
-    }
-    
-    if ((ret = flv->dec.initialize(&flv->reader)) != ERROR_SUCCESS) {
-        srs_freep(flv);
-        return NULL;
-    }
-    
-    return flv;
-}
-
-srs_flv_t srs_flv_open_write(const char* file)
-{
-    int ret = ERROR_SUCCESS;
-    
-    FlvContext* flv = new FlvContext();
-    
-    if ((ret = flv->writer.open(file)) != ERROR_SUCCESS) {
-        srs_freep(flv);
-        return NULL;
-    }
-    
-    if ((ret = flv->enc.initialize(&flv->writer)) != ERROR_SUCCESS) {
-        srs_freep(flv);
-        return NULL;
-    }
-    
-    return flv;
-}
-
-void srs_flv_close(srs_flv_t flv)
-{
-    FlvContext* context = (FlvContext*)flv;
-    srs_freep(context);
-}
-
-int srs_flv_read_header(srs_flv_t flv, char header[9])
-{
-    int ret = ERROR_SUCCESS;
-    
-    FlvContext* context = (FlvContext*)flv;
-
-    if (!context->reader.is_open()) {
-        return ERROR_SYSTEM_IO_INVALID;
-    }
-    
-    if ((ret = context->dec.read_header(header)) != ERROR_SUCCESS) {
+    SrsStream* stream = &context->aac_raw_stream;
+    if ((ret = stream->initialize(frame, frame_size)) != ERROR_SUCCESS) {
         return ret;
     }
     
-    char ts[4]; // tag size
-    if ((ret = context->dec.read_previous_tag_size(ts)) != ERROR_SUCCESS) {
-        return ret;
+    while (!stream->empty()) {
+        int adts_header_start = stream->pos();
+        
+        // decode the ADTS.
+        // @see aac-mp4a-format-ISO_IEC_14496-3+2001.pdf, page 75,
+        //      1.A.2.2 Audio_Data_Transport_Stream frame, ADTS
+        // @see https://github.com/winlinvip/simple-rtmp-server/issues/212#issuecomment-64145885
+        // byte_alignment()
+        
+        // adts_fixed_header:
+        //      12bits syncword,
+        //      16bits left.
+        // adts_variable_header:
+        //      28bits
+        //      12+16+28=56bits
+        // adts_error_check:
+        //      16bits if protection_absent
+        //      56+16=72bits
+        // if protection_absent:
+        //      require(7bytes)=56bits
+        // else
+        //      require(9bytes)=72bits
+        if (!stream->require(7)) {
+            return ERROR_AAC_ADTS_HEADER;
+        }
+        
+        // for aac, the frame must be ADTS format.
+        if (!srs_aac_startswith_adts(stream)) {
+            return ERROR_AAC_REQUIRED_ADTS;
+        }
+        
+        // Syncword 12 bslbf
+        stream->read_1bytes();
+        // 4bits left.
+        // adts_fixed_header(), 1.A.2.2.1 Fixed Header of ADTS
+        // ID 1 bslbf
+        // Layer 2 uimsbf
+        // protection_absent 1 bslbf
+        int8_t fh0 = (stream->read_1bytes() & 0x0f);
+        /*int8_t fh_id = (fh0 >> 3) & 0x01;*/
+        /*int8_t fh_layer = (fh0 >> 1) & 0x03;*/
+        int8_t fh_protection_absent = fh0 & 0x01;
+        
+        int16_t fh1 = stream->read_2bytes();
+        // Profile_ObjectType 2 uimsbf
+        // sampling_frequency_index 4 uimsbf
+        // private_bit 1 bslbf
+        // channel_configuration 3 uimsbf
+        // original/copy 1 bslbf
+        // home 1 bslbf
+        int8_t fh_Profile_ObjectType = (fh1 >> 14) & 0x03;
+        int8_t fh_sampling_frequency_index = (fh1 >> 10) & 0x0f;
+        /*int8_t fh_private_bit = (fh1 >> 9) & 0x01;*/
+        int8_t fh_channel_configuration = (fh1 >> 6) & 0x07;
+        /*int8_t fh_original = (fh1 >> 5) & 0x01;*/
+        /*int8_t fh_home = (fh1 >> 4) & 0x01;*/
+        // @remark, Emphasis is removed, 
+        //      @see https://github.com/winlinvip/simple-rtmp-server/issues/212#issuecomment-64154736
+        //int8_t fh_Emphasis = (fh1 >> 2) & 0x03;
+        // 4bits left.
+        // adts_variable_header(), 1.A.2.2.2 Variable Header of ADTS
+        // copyright_identification_bit 1 bslbf
+        // copyright_identification_start 1 bslbf
+        /*int8_t fh_copyright_identification_bit = (fh1 >> 3) & 0x01;*/
+        /*int8_t fh_copyright_identification_start = (fh1 >> 2) & 0x01;*/
+        // aac_frame_length 13 bslbf: Length of the frame including headers and error_check in bytes.
+        // use the left 2bits as the 13 and 12 bit,
+        // the aac_frame_length is 13bits, so we move 13-2=11.
+        int16_t fh_aac_frame_length = (fh1 << 11) & 0x0800;
+        
+        int32_t fh2 = stream->read_3bytes();
+        // aac_frame_length 13 bslbf: consume the first 13-2=11bits
+        // the fh2 is 24bits, so we move right 24-11=13.
+        fh_aac_frame_length |= (fh2 >> 13) & 0x07ff;
+        // adts_buffer_fullness 11 bslbf
+        /*int16_t fh_adts_buffer_fullness = (fh2 >> 2) & 0x7ff;*/
+        // no_raw_data_blocks_in_frame 2 uimsbf
+        /*int16_t fh_no_raw_data_blocks_in_frame = fh2 & 0x03;*/
+        // adts_error_check(), 1.A.2.2.3 Error detection
+        if (!fh_protection_absent) {
+            if (!stream->require(2)) {
+                return ERROR_AAC_ADTS_HEADER;
+            }
+            // crc_check 16 Rpchof
+            /*int16_t crc_check = */stream->read_2bytes();
+        }
+        
+        // TODO: check the fh_sampling_frequency_index
+        // TODO: check the fh_channel_configuration
+        
+        // raw_data_blocks
+        int adts_header_size = stream->pos() - adts_header_start;
+        int raw_data_size = fh_aac_frame_length - adts_header_size;
+        if (!stream->require(raw_data_size)) {
+            return ERROR_AAC_ADTS_HEADER;
+        }
+        
+        char* raw_data = stream->data() + stream->pos();
+        if ((ret = __srs_write_aac_adts_frame(context,
+            sound_format, sound_rate, sound_size, sound_type,
+            fh_Profile_ObjectType, fh_sampling_frequency_index, fh_channel_configuration,
+            raw_data, raw_data_size, timestamp)) != ERROR_SUCCESS
+        ) {
+            return ret;
+        }
+        stream->skip(raw_data_size);
     }
     
     return ret;
 }
 
-int srs_flv_read_tag_header(srs_flv_t flv, char* ptype, int32_t* pdata_size, u_int32_t* ptime)
-{
+/**
+* write audio raw frame to SRS.
+*/
+int srs_audio_write_raw_frame(srs_rtmp_t rtmp, 
+    char sound_format, char sound_rate, char sound_size, char sound_type,
+    char* frame, int frame_size, u_int32_t timestamp
+) {
     int ret = ERROR_SUCCESS;
     
-    FlvContext* context = (FlvContext*)flv;
-
-    if (!context->reader.is_open()) {
-        return ERROR_SYSTEM_IO_INVALID;
-    }
+    Context* context = (Context*)rtmp;
+    srs_assert(context);
     
-    if ((ret = context->dec.read_tag_header(ptype, pdata_size, ptime)) != ERROR_SUCCESS) {
-        return ret;
-    }
-    
-    return ret;
-}
-
-int srs_flv_read_tag_data(srs_flv_t flv, char* data, int32_t size)
-{
-    int ret = ERROR_SUCCESS;
-    
-    FlvContext* context = (FlvContext*)flv;
-
-    if (!context->reader.is_open()) {
-        return ERROR_SYSTEM_IO_INVALID;
-    }
-    
-    if ((ret = context->dec.read_tag_data(data, size)) != ERROR_SUCCESS) {
-        return ret;
-    }
-    
-    char ts[4]; // tag size
-    if ((ret = context->dec.read_previous_tag_size(ts)) != ERROR_SUCCESS) {
-        return ret;
-    }
-    
-    return ret;
-}
-
-int srs_flv_write_header(srs_flv_t flv, char header[9])
-{
-    int ret = ERROR_SUCCESS;
-    
-    FlvContext* context = (FlvContext*)flv;
-
-    if (!context->writer.is_open()) {
-        return ERROR_SYSTEM_IO_INVALID;
-    }
-    
-    if ((ret = context->enc.write_header(header)) != ERROR_SUCCESS) {
-        return ret;
-    }
-    
-    return ret;
-}
-
-int srs_flv_write_tag(srs_flv_t flv, char type, int32_t time, char* data, int size)
-{
-    int ret = ERROR_SUCCESS;
-    
-    FlvContext* context = (FlvContext*)flv;
-
-    if (!context->writer.is_open()) {
-        return ERROR_SYSTEM_IO_INVALID;
-    }
-    
-    if (type == SRS_RTMP_TYPE_AUDIO) {
-        return context->enc.write_audio(time, data, size);
-    } else if (type == SRS_RTMP_TYPE_VIDEO) {
-        return context->enc.write_video(time, data, size);
+    if (sound_format == SrsCodecAudioAAC) {
+        // for aac, the frame must be ADTS format.
+        if (!srs_aac_is_adts(frame, frame_size)) {
+            return ERROR_AAC_REQUIRED_ADTS;
+        }
+        
+        // for aac, demux the ADTS to RTMP format.
+        return __srs_write_aac_adts_frames(context, 
+            sound_format, sound_rate, sound_size, sound_type, 
+            frame, frame_size, timestamp);
     } else {
-        return context->enc.write_metadata(data, size);
-    }
-
-    return ret;
-}
-
-int srs_flv_size_tag(int data_size)
-{
-    return SrsFlvEncoder::size_tag(data_size);
-}
-
-int64_t srs_flv_tellg(srs_flv_t flv)
-{
-    FlvContext* context = (FlvContext*)flv;
-    return context->reader.tellg();
-}
-
-void srs_flv_lseek(srs_flv_t flv, int64_t offset)
-{
-    FlvContext* context = (FlvContext*)flv;
-    context->reader.lseek(offset);
-}
-
-srs_flv_bool srs_flv_is_eof(int error_code)
-{
-    return error_code == ERROR_SYSTEM_FILE_EOF;
-}
-
-srs_flv_bool srs_flv_is_sequence_header(char* data, int32_t size)
-{
-    return SrsFlvCodec::video_is_sequence_header(data, (int)size);
-}
-
-srs_flv_bool srs_flv_is_keyframe(char* data, int32_t size)
-{
-    return SrsFlvCodec::video_is_keyframe(data, (int)size);
-}
-
-srs_amf0_t srs_amf0_parse(char* data, int size, int* nparsed)
-{
-    int ret = ERROR_SUCCESS;
-    
-    srs_amf0_t amf0 = NULL;
-    
-    SrsStream stream;
-    if ((ret = stream.initialize(data, size)) != ERROR_SUCCESS) {
-        return amf0;
+        // for other data, directly write frame.
+        return __srs_write_audio_raw_frame(context, 
+            sound_format, sound_rate, sound_size, sound_type, 
+            0, frame, frame_size, timestamp);
     }
     
-    SrsAmf0Any* any = NULL;
-    if ((ret = SrsAmf0Any::discovery(&stream, &any)) != ERROR_SUCCESS) {
-        return amf0;
-    }
-    
-    stream.skip(-1 * stream.pos());
-    if ((ret = any->read(&stream)) != ERROR_SUCCESS) {
-        srs_freep(any);
-        return amf0;
-    }
-    
-    *nparsed = stream.pos();
-    amf0 = (srs_amf0_t)any;
-    
-    return amf0;
-}
-
-srs_amf0_t srs_amf0_create_number(srs_amf0_number value)
-{
-    return SrsAmf0Any::number(value);
-}
-
-srs_amf0_t srs_amf0_create_ecma_array()
-{
-    return SrsAmf0Any::ecma_array();
-}
-
-srs_amf0_t srs_amf0_create_strict_array()
-{
-    return SrsAmf0Any::strict_array();
-}
-
-srs_amf0_t srs_amf0_create_object()
-{
-    return SrsAmf0Any::object();
-}
-
-void srs_amf0_free(srs_amf0_t amf0)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    srs_freep(any);
-}
-
-void srs_amf0_free_bytes(char* data)
-{
-    srs_freep(data);
-}
-
-int srs_amf0_size(srs_amf0_t amf0)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    return any->total_size();
-}
-
-int srs_amf0_serialize(srs_amf0_t amf0, char* data, int size)
-{
-    int ret = ERROR_SUCCESS;
-    
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    
-    SrsStream stream;
-    if ((ret = stream.initialize(data, size)) != ERROR_SUCCESS) {
-        return ret;
-    }
-    
-    if ((ret = any->write(&stream)) != ERROR_SUCCESS) {
-        return ret;
-    }
     
     return ret;
 }
 
-srs_amf0_bool srs_amf0_is_string(srs_amf0_t amf0)
+/**
+* whether aac raw data is in adts format,
+* which bytes sequence matches '1111 1111 1111'B, that is 0xFFF.
+*/
+srs_bool srs_aac_is_adts(char* aac_raw_data, int ac_raw_size)
 {
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    return any->is_string();
-}
-
-srs_amf0_bool srs_amf0_is_boolean(srs_amf0_t amf0)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    return any->is_boolean();
-}
-
-srs_amf0_bool srs_amf0_is_number(srs_amf0_t amf0)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    return any->is_number();
-}
-
-srs_amf0_bool srs_amf0_is_null(srs_amf0_t amf0)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    return any->is_null();
-}
-
-srs_amf0_bool srs_amf0_is_object(srs_amf0_t amf0)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    return any->is_object();
-}
-
-srs_amf0_bool srs_amf0_is_ecma_array(srs_amf0_t amf0)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    return any->is_ecma_array();
-}
-
-srs_amf0_bool srs_amf0_is_strict_array(srs_amf0_t amf0)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    return any->is_strict_array();
-}
-
-const char* srs_amf0_to_string(srs_amf0_t amf0)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    return any->to_str_raw();
-}
-
-srs_amf0_bool srs_amf0_to_boolean(srs_amf0_t amf0)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    return any->to_boolean();
-}
-
-srs_amf0_number srs_amf0_to_number(srs_amf0_t amf0)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    return any->to_number();
-}
-
-void srs_amf0_set_number(srs_amf0_t amf0, srs_amf0_number value)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    any->set_number(value);
-}
-
-int srs_amf0_object_property_count(srs_amf0_t amf0)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    srs_assert(any->is_object());
-
-    SrsAmf0Object* obj = (SrsAmf0Object*)amf0;
-    return obj->count();
-}
-
-const char* srs_amf0_object_property_name_at(srs_amf0_t amf0, int index)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    srs_assert(any->is_object());
-
-    SrsAmf0Object* obj = (SrsAmf0Object*)amf0;
-    return obj->key_raw_at(index);
-}
-
-srs_amf0_t srs_amf0_object_property_value_at(srs_amf0_t amf0, int index)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    srs_assert(any->is_object());
-
-    SrsAmf0Object* obj = (SrsAmf0Object*)amf0;
-    return (srs_amf0_t)obj->value_at(index);
-}
-
-srs_amf0_t srs_amf0_object_property(srs_amf0_t amf0, const char* name)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    srs_assert(any->is_object());
-
-    SrsAmf0Object* obj = (SrsAmf0Object*)amf0;
-    return (srs_amf0_t)obj->get_property(name);
-}
-
-void srs_amf0_object_property_set(srs_amf0_t amf0, const char* name, srs_amf0_t value)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    srs_assert(any->is_object());
-
-    SrsAmf0Object* obj = (SrsAmf0Object*)amf0;
-    any = (SrsAmf0Any*)value;
-    obj->set(name, any);
-}
-
-void srs_amf0_object_clear(srs_amf0_t amf0)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    srs_assert(any->is_object());
-
-    SrsAmf0Object* obj = (SrsAmf0Object*)amf0;
-    obj->clear();
-}
-
-int srs_amf0_ecma_array_property_count(srs_amf0_t amf0)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    srs_assert(any->is_ecma_array());
-
-    SrsAmf0EcmaArray * obj = (SrsAmf0EcmaArray*)amf0;
-    return obj->count();
-}
-
-const char* srs_amf0_ecma_array_property_name_at(srs_amf0_t amf0, int index)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    srs_assert(any->is_ecma_array());
-
-    SrsAmf0EcmaArray* obj = (SrsAmf0EcmaArray*)amf0;
-    return obj->key_raw_at(index);
-}
-
-srs_amf0_t srs_amf0_ecma_array_property_value_at(srs_amf0_t amf0, int index)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    srs_assert(any->is_ecma_array());
-
-    SrsAmf0EcmaArray* obj = (SrsAmf0EcmaArray*)amf0;
-    return (srs_amf0_t)obj->value_at(index);
-}
-
-srs_amf0_t srs_amf0_ecma_array_property(srs_amf0_t amf0, const char* name)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    srs_assert(any->is_ecma_array());
-
-    SrsAmf0EcmaArray* obj = (SrsAmf0EcmaArray*)amf0;
-    return (srs_amf0_t)obj->get_property(name);
-}
-
-void srs_amf0_ecma_array_property_set(srs_amf0_t amf0, const char* name, srs_amf0_t value)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    srs_assert(any->is_ecma_array());
-
-    SrsAmf0EcmaArray* obj = (SrsAmf0EcmaArray*)amf0;
-    any = (SrsAmf0Any*)value;
-    obj->set(name, any);
-}
-
-int srs_amf0_strict_array_property_count(srs_amf0_t amf0)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    srs_assert(any->is_strict_array());
-
-    SrsAmf0StrictArray * obj = (SrsAmf0StrictArray*)amf0;
-    return obj->count();
-}
-
-srs_amf0_t srs_amf0_strict_array_property_at(srs_amf0_t amf0, int index)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    srs_assert(any->is_strict_array());
-
-    SrsAmf0StrictArray* obj = (SrsAmf0StrictArray*)amf0;
-    return (srs_amf0_t)obj->at(index);
-}
-
-void srs_amf0_strict_array_append(srs_amf0_t amf0, srs_amf0_t value)
-{
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
-    srs_assert(any->is_strict_array());
-
-    SrsAmf0StrictArray* obj = (SrsAmf0StrictArray*)amf0;
-    any = (SrsAmf0Any*)value;
-    obj->append(any);
-}
-
-char* srs_amf0_human_print(srs_amf0_t amf0, char** pdata, int* psize)
-{
-    if (!amf0) {
-        return NULL;
+    SrsStream stream;
+    if (stream.initialize(aac_raw_data, ac_raw_size) != ERROR_SUCCESS) {
+        return false;
     }
     
-    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    return srs_aac_startswith_adts(&stream);
+}
+
+/**
+* parse the adts header to get the frame size.
+*/
+int srs_aac_adts_frame_size(char* aac_raw_data, int ac_raw_size)
+{
+    int size = -1;
     
-    return any->human_print(pdata, psize);
+    if (!srs_aac_is_adts(aac_raw_data, ac_raw_size)) {
+        return size;
+    }
+    
+    // adts always 7bytes.
+    if (ac_raw_size <= 7) {
+        return size;
+    }
+    
+    // last 2bits
+    int16_t ch3 = aac_raw_data[3];
+    // whole 8bits
+    int16_t ch4 = aac_raw_data[4];
+    // first 3bits
+    int16_t ch5 = aac_raw_data[5];
+    
+    size = ((ch3 << 11) & 0x1800) | ((ch4 << 3) & 0x07f8) | ((ch5 >> 5) & 0x0007);
+    
+    return size;
 }
 
 /**
@@ -18327,7 +18590,6 @@ int __srs_write_h264_packet(Context* context,
     // @see: E.4.3 Video Tags, video_file_format_spec_v10_1.pdf, page 78
     int size = h264_raw_size + 5;
     char* data = new char[size];
-    memcpy(data + 5, h264_raw_data, h264_raw_size);
     char* p = data;
     
     // @see: E.4.3 Video Tags, video_file_format_spec_v10_1.pdf, page 78
@@ -18349,7 +18611,10 @@ int __srs_write_h264_packet(Context* context,
     *p++ = pp[1];
     *p++ = pp[0];
     
-    return srs_write_packet(context, SRS_RTMP_TYPE_VIDEO, timestamp, data, size);
+    // h.264 raw data.
+    memcpy(p, h264_raw_data, h264_raw_size);
+    
+    return srs_rtmp_write_packet(context, SRS_RTMP_TYPE_VIDEO, timestamp, data, size);
 }
 
 /**
@@ -18633,22 +18898,22 @@ int srs_h264_write_raw_frames(srs_rtmp_t rtmp,
     return error_code_return;
 }
 
-srs_h264_bool srs_h264_is_dvbsp_error(int error_code)
+srs_bool srs_h264_is_dvbsp_error(int error_code)
 {
     return error_code == ERROR_H264_DROP_BEFORE_SPS_PPS;
 }
 
-srs_h264_bool srs_h264_is_duplicated_sps_error(int error_code)
+srs_bool srs_h264_is_duplicated_sps_error(int error_code)
 {
     return error_code == ERROR_H264_DUPLICATED_SPS;
 }
 
-srs_h264_bool srs_h264_is_duplicated_pps_error(int error_code)
+srs_bool srs_h264_is_duplicated_pps_error(int error_code)
 {
     return error_code == ERROR_H264_DUPLICATED_PPS;
 }
 
-int srs_h264_startswith_annexb(char* h264_raw_data, int h264_raw_size, int* pnb_start_code)
+srs_bool srs_h264_startswith_annexb(char* h264_raw_data, int h264_raw_size, int* pnb_start_code)
 {
     SrsStream stream;
     if (stream.initialize(h264_raw_data, h264_raw_size) != ERROR_SUCCESS) {
@@ -18656,6 +18921,931 @@ int srs_h264_startswith_annexb(char* h264_raw_data, int h264_raw_size, int* pnb_
     }
     
     return srs_avc_startswith_annexb(&stream, pnb_start_code);
+}
+
+struct FlvContext
+{
+    SrsFileReader reader;
+    SrsFileWriter writer;
+    SrsFlvEncoder enc;
+    SrsFlvDecoder dec;
+};
+
+srs_flv_t srs_flv_open_read(const char* file)
+{
+    int ret = ERROR_SUCCESS;
+    
+    FlvContext* flv = new FlvContext();
+    
+    if ((ret = flv->reader.open(file)) != ERROR_SUCCESS) {
+        srs_freep(flv);
+        return NULL;
+    }
+    
+    if ((ret = flv->dec.initialize(&flv->reader)) != ERROR_SUCCESS) {
+        srs_freep(flv);
+        return NULL;
+    }
+    
+    return flv;
+}
+
+srs_flv_t srs_flv_open_write(const char* file)
+{
+    int ret = ERROR_SUCCESS;
+    
+    FlvContext* flv = new FlvContext();
+    
+    if ((ret = flv->writer.open(file)) != ERROR_SUCCESS) {
+        srs_freep(flv);
+        return NULL;
+    }
+    
+    if ((ret = flv->enc.initialize(&flv->writer)) != ERROR_SUCCESS) {
+        srs_freep(flv);
+        return NULL;
+    }
+    
+    return flv;
+}
+
+void srs_flv_close(srs_flv_t flv)
+{
+    FlvContext* context = (FlvContext*)flv;
+    srs_freep(context);
+}
+
+int srs_flv_read_header(srs_flv_t flv, char header[9])
+{
+    int ret = ERROR_SUCCESS;
+    
+    FlvContext* context = (FlvContext*)flv;
+
+    if (!context->reader.is_open()) {
+        return ERROR_SYSTEM_IO_INVALID;
+    }
+    
+    if ((ret = context->dec.read_header(header)) != ERROR_SUCCESS) {
+        return ret;
+    }
+    
+    char ts[4]; // tag size
+    if ((ret = context->dec.read_previous_tag_size(ts)) != ERROR_SUCCESS) {
+        return ret;
+    }
+    
+    return ret;
+}
+
+int srs_flv_read_tag_header(srs_flv_t flv, char* ptype, int32_t* pdata_size, u_int32_t* ptime)
+{
+    int ret = ERROR_SUCCESS;
+    
+    FlvContext* context = (FlvContext*)flv;
+
+    if (!context->reader.is_open()) {
+        return ERROR_SYSTEM_IO_INVALID;
+    }
+    
+    if ((ret = context->dec.read_tag_header(ptype, pdata_size, ptime)) != ERROR_SUCCESS) {
+        return ret;
+    }
+    
+    return ret;
+}
+
+int srs_flv_read_tag_data(srs_flv_t flv, char* data, int32_t size)
+{
+    int ret = ERROR_SUCCESS;
+    
+    FlvContext* context = (FlvContext*)flv;
+
+    if (!context->reader.is_open()) {
+        return ERROR_SYSTEM_IO_INVALID;
+    }
+    
+    if ((ret = context->dec.read_tag_data(data, size)) != ERROR_SUCCESS) {
+        return ret;
+    }
+    
+    char ts[4]; // tag size
+    if ((ret = context->dec.read_previous_tag_size(ts)) != ERROR_SUCCESS) {
+        return ret;
+    }
+    
+    return ret;
+}
+
+int srs_flv_write_header(srs_flv_t flv, char header[9])
+{
+    int ret = ERROR_SUCCESS;
+    
+    FlvContext* context = (FlvContext*)flv;
+
+    if (!context->writer.is_open()) {
+        return ERROR_SYSTEM_IO_INVALID;
+    }
+    
+    if ((ret = context->enc.write_header(header)) != ERROR_SUCCESS) {
+        return ret;
+    }
+    
+    return ret;
+}
+
+int srs_flv_write_tag(srs_flv_t flv, char type, int32_t time, char* data, int size)
+{
+    int ret = ERROR_SUCCESS;
+    
+    FlvContext* context = (FlvContext*)flv;
+
+    if (!context->writer.is_open()) {
+        return ERROR_SYSTEM_IO_INVALID;
+    }
+    
+    if (type == SRS_RTMP_TYPE_AUDIO) {
+        return context->enc.write_audio(time, data, size);
+    } else if (type == SRS_RTMP_TYPE_VIDEO) {
+        return context->enc.write_video(time, data, size);
+    } else {
+        return context->enc.write_metadata(data, size);
+    }
+
+    return ret;
+}
+
+int srs_flv_size_tag(int data_size)
+{
+    return SrsFlvEncoder::size_tag(data_size);
+}
+
+int64_t srs_flv_tellg(srs_flv_t flv)
+{
+    FlvContext* context = (FlvContext*)flv;
+    return context->reader.tellg();
+}
+
+void srs_flv_lseek(srs_flv_t flv, int64_t offset)
+{
+    FlvContext* context = (FlvContext*)flv;
+    context->reader.lseek(offset);
+}
+
+srs_bool srs_flv_is_eof(int error_code)
+{
+    return error_code == ERROR_SYSTEM_FILE_EOF;
+}
+
+srs_bool srs_flv_is_sequence_header(char* data, int32_t size)
+{
+    return SrsFlvCodec::video_is_sequence_header(data, (int)size);
+}
+
+srs_bool srs_flv_is_keyframe(char* data, int32_t size)
+{
+    return SrsFlvCodec::video_is_keyframe(data, (int)size);
+}
+
+srs_amf0_t srs_amf0_parse(char* data, int size, int* nparsed)
+{
+    int ret = ERROR_SUCCESS;
+    
+    srs_amf0_t amf0 = NULL;
+    
+    SrsStream stream;
+    if ((ret = stream.initialize(data, size)) != ERROR_SUCCESS) {
+        return amf0;
+    }
+    
+    SrsAmf0Any* any = NULL;
+    if ((ret = SrsAmf0Any::discovery(&stream, &any)) != ERROR_SUCCESS) {
+        return amf0;
+    }
+    
+    stream.skip(-1 * stream.pos());
+    if ((ret = any->read(&stream)) != ERROR_SUCCESS) {
+        srs_freep(any);
+        return amf0;
+    }
+    
+    if (nparsed) {
+        *nparsed = stream.pos();
+    }
+    amf0 = (srs_amf0_t)any;
+    
+    return amf0;
+}
+
+srs_amf0_t srs_amf0_create_number(srs_amf0_number value)
+{
+    return SrsAmf0Any::number(value);
+}
+
+srs_amf0_t srs_amf0_create_ecma_array()
+{
+    return SrsAmf0Any::ecma_array();
+}
+
+srs_amf0_t srs_amf0_create_strict_array()
+{
+    return SrsAmf0Any::strict_array();
+}
+
+srs_amf0_t srs_amf0_create_object()
+{
+    return SrsAmf0Any::object();
+}
+
+void srs_amf0_free(srs_amf0_t amf0)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    srs_freep(any);
+}
+
+void srs_amf0_free_bytes(char* data)
+{
+    srs_freep(data);
+}
+
+int srs_amf0_size(srs_amf0_t amf0)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    return any->total_size();
+}
+
+int srs_amf0_serialize(srs_amf0_t amf0, char* data, int size)
+{
+    int ret = ERROR_SUCCESS;
+    
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    
+    SrsStream stream;
+    if ((ret = stream.initialize(data, size)) != ERROR_SUCCESS) {
+        return ret;
+    }
+    
+    if ((ret = any->write(&stream)) != ERROR_SUCCESS) {
+        return ret;
+    }
+    
+    return ret;
+}
+
+srs_bool srs_amf0_is_string(srs_amf0_t amf0)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    return any->is_string();
+}
+
+srs_bool srs_amf0_is_boolean(srs_amf0_t amf0)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    return any->is_boolean();
+}
+
+srs_bool srs_amf0_is_number(srs_amf0_t amf0)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    return any->is_number();
+}
+
+srs_bool srs_amf0_is_null(srs_amf0_t amf0)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    return any->is_null();
+}
+
+srs_bool srs_amf0_is_object(srs_amf0_t amf0)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    return any->is_object();
+}
+
+srs_bool srs_amf0_is_ecma_array(srs_amf0_t amf0)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    return any->is_ecma_array();
+}
+
+srs_bool srs_amf0_is_strict_array(srs_amf0_t amf0)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    return any->is_strict_array();
+}
+
+const char* srs_amf0_to_string(srs_amf0_t amf0)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    return any->to_str_raw();
+}
+
+srs_bool srs_amf0_to_boolean(srs_amf0_t amf0)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    return any->to_boolean();
+}
+
+srs_amf0_number srs_amf0_to_number(srs_amf0_t amf0)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    return any->to_number();
+}
+
+void srs_amf0_set_number(srs_amf0_t amf0, srs_amf0_number value)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    any->set_number(value);
+}
+
+int srs_amf0_object_property_count(srs_amf0_t amf0)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    srs_assert(any->is_object());
+
+    SrsAmf0Object* obj = (SrsAmf0Object*)amf0;
+    return obj->count();
+}
+
+const char* srs_amf0_object_property_name_at(srs_amf0_t amf0, int index)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    srs_assert(any->is_object());
+
+    SrsAmf0Object* obj = (SrsAmf0Object*)amf0;
+    return obj->key_raw_at(index);
+}
+
+srs_amf0_t srs_amf0_object_property_value_at(srs_amf0_t amf0, int index)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    srs_assert(any->is_object());
+
+    SrsAmf0Object* obj = (SrsAmf0Object*)amf0;
+    return (srs_amf0_t)obj->value_at(index);
+}
+
+srs_amf0_t srs_amf0_object_property(srs_amf0_t amf0, const char* name)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    srs_assert(any->is_object());
+
+    SrsAmf0Object* obj = (SrsAmf0Object*)amf0;
+    return (srs_amf0_t)obj->get_property(name);
+}
+
+void srs_amf0_object_property_set(srs_amf0_t amf0, const char* name, srs_amf0_t value)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    srs_assert(any->is_object());
+
+    SrsAmf0Object* obj = (SrsAmf0Object*)amf0;
+    any = (SrsAmf0Any*)value;
+    obj->set(name, any);
+}
+
+void srs_amf0_object_clear(srs_amf0_t amf0)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    srs_assert(any->is_object());
+
+    SrsAmf0Object* obj = (SrsAmf0Object*)amf0;
+    obj->clear();
+}
+
+int srs_amf0_ecma_array_property_count(srs_amf0_t amf0)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    srs_assert(any->is_ecma_array());
+
+    SrsAmf0EcmaArray * obj = (SrsAmf0EcmaArray*)amf0;
+    return obj->count();
+}
+
+const char* srs_amf0_ecma_array_property_name_at(srs_amf0_t amf0, int index)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    srs_assert(any->is_ecma_array());
+
+    SrsAmf0EcmaArray* obj = (SrsAmf0EcmaArray*)amf0;
+    return obj->key_raw_at(index);
+}
+
+srs_amf0_t srs_amf0_ecma_array_property_value_at(srs_amf0_t amf0, int index)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    srs_assert(any->is_ecma_array());
+
+    SrsAmf0EcmaArray* obj = (SrsAmf0EcmaArray*)amf0;
+    return (srs_amf0_t)obj->value_at(index);
+}
+
+srs_amf0_t srs_amf0_ecma_array_property(srs_amf0_t amf0, const char* name)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    srs_assert(any->is_ecma_array());
+
+    SrsAmf0EcmaArray* obj = (SrsAmf0EcmaArray*)amf0;
+    return (srs_amf0_t)obj->get_property(name);
+}
+
+void srs_amf0_ecma_array_property_set(srs_amf0_t amf0, const char* name, srs_amf0_t value)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    srs_assert(any->is_ecma_array());
+
+    SrsAmf0EcmaArray* obj = (SrsAmf0EcmaArray*)amf0;
+    any = (SrsAmf0Any*)value;
+    obj->set(name, any);
+}
+
+int srs_amf0_strict_array_property_count(srs_amf0_t amf0)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    srs_assert(any->is_strict_array());
+
+    SrsAmf0StrictArray * obj = (SrsAmf0StrictArray*)amf0;
+    return obj->count();
+}
+
+srs_amf0_t srs_amf0_strict_array_property_at(srs_amf0_t amf0, int index)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    srs_assert(any->is_strict_array());
+
+    SrsAmf0StrictArray* obj = (SrsAmf0StrictArray*)amf0;
+    return (srs_amf0_t)obj->at(index);
+}
+
+void srs_amf0_strict_array_append(srs_amf0_t amf0, srs_amf0_t value)
+{
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    srs_assert(any->is_strict_array());
+
+    SrsAmf0StrictArray* obj = (SrsAmf0StrictArray*)amf0;
+    any = (SrsAmf0Any*)value;
+    obj->append(any);
+}
+
+int64_t srs_utils_time_ms()
+{
+    srs_update_system_time_ms();
+    return srs_get_system_time_ms();
+}
+
+int64_t srs_utils_send_bytes(srs_rtmp_t rtmp)
+{
+    srs_assert(rtmp != NULL);
+    Context* context = (Context*)rtmp;
+    return context->rtmp->get_send_bytes();
+}
+
+int64_t srs_utils_recv_bytes(srs_rtmp_t rtmp)
+{
+    srs_assert(rtmp != NULL);
+    Context* context = (Context*)rtmp;
+    return context->rtmp->get_recv_bytes();
+}
+
+int srs_utils_parse_timestamp(
+    u_int32_t time, char type, char* data, int size,
+    u_int32_t* ppts
+) {
+    int ret = ERROR_SUCCESS;
+    
+    if (type != SRS_RTMP_TYPE_VIDEO) {
+        *ppts = time;
+        return ret;
+    }
+
+    if (!SrsFlvCodec::video_is_h264(data, size)) {
+        return ERROR_FLV_INVALID_VIDEO_TAG;
+    }
+
+    if (SrsFlvCodec::video_is_sequence_header(data, size)) {
+        *ppts = time;
+        return ret;
+    }
+    
+    // 1bytes, frame type and codec id.
+    // 1bytes, avc packet type.
+    // 3bytes, cts, composition time,
+    //      pts = dts + cts, or 
+    //      cts = pts - dts.
+    if (size < 5) {
+        return ERROR_FLV_INVALID_VIDEO_TAG;
+    }
+    
+    u_int32_t cts = 0;
+    char* p = data + 2;
+    char* pp = (char*)&cts;
+    pp[2] = *p++;
+    pp[1] = *p++;
+    pp[0] = *p++;
+
+    *ppts = time + cts;
+    
+    return ret;
+}
+
+char srs_utils_flv_video_codec_id(char* data, int size)
+{
+    if (size < 1) {
+        return 0;
+    }
+
+    char codec_id = data[0];
+    codec_id = codec_id & 0x0F;
+    
+    return codec_id;
+}
+
+char srs_utils_flv_video_avc_packet_type(char* data, int size)
+{
+    if (size < 2) {
+        return -1;
+    }
+    
+    if (!SrsFlvCodec::video_is_h264(data, size)) {
+        return -1;
+    }
+    
+    u_int8_t avc_packet_type = data[1];
+    
+    if (avc_packet_type > 2) {
+        return -1;
+    }
+    
+    return avc_packet_type;
+}
+
+char srs_utils_flv_video_frame_type(char* data, int size)
+{
+    if (size < 1) {
+        return -1;
+    }
+    
+    if (!SrsFlvCodec::video_is_h264(data, size)) {
+        return -1;
+    }
+    
+    u_int8_t frame_type = data[0];
+    frame_type = (frame_type >> 4) & 0x0f;
+    if (frame_type < 1 || frame_type > 5) {
+        return -1;
+    }
+    
+    return frame_type;
+}
+
+char srs_utils_flv_audio_sound_format(char* data, int size)
+{
+    if (size < 1) {
+        return -1;
+    }
+    
+    u_int8_t sound_format = data[0];
+    sound_format = (sound_format >> 4) & 0x0f;
+    if (sound_format > 15 || sound_format == 12 || sound_format == 13) {
+        return -1;
+    }
+    
+    return sound_format;
+}
+
+char srs_utils_flv_audio_sound_rate(char* data, int size)
+{
+    if (size < 1) {
+        return -1;
+    }
+    
+    u_int8_t sound_rate = data[0];
+    sound_rate = (sound_rate >> 2) & 0x03;
+    if (sound_rate > 3) {
+        return -1;
+    }
+    
+    return sound_rate;
+}
+
+char srs_utils_flv_audio_sound_size(char* data, int size)
+{
+    if (size < 1) {
+        return -1;
+    }
+    
+    u_int8_t sound_size = data[0];
+    sound_size = (sound_size >> 1) & 0x01;
+    if (sound_size > 1) {
+        return -1;
+    }
+    
+    return sound_size;
+}
+
+char srs_utils_flv_audio_sound_type(char* data, int size)
+{
+    if (size < 1) {
+        return -1;
+    }
+    
+    u_int8_t sound_type = data[0];
+    sound_type = sound_type & 0x01;
+    if (sound_type > 1) {
+        return -1;
+    }
+    
+    return sound_type;
+}
+
+char srs_utils_flv_audio_aac_packet_type(char* data, int size)
+{
+    if (size < 2) {
+        return -1;
+    }
+    
+    if (srs_utils_flv_audio_sound_format(data, size) != 10) {
+        return -1;
+    }
+    
+    u_int8_t aac_packet_type = data[1];
+    aac_packet_type = aac_packet_type;
+    if (aac_packet_type > 1) {
+        return -1;
+    }
+    
+    return aac_packet_type;
+}
+
+char* srs_human_amf0_print(srs_amf0_t amf0, char** pdata, int* psize)
+{
+    if (!amf0) {
+        return NULL;
+    }
+    
+    SrsAmf0Any* any = (SrsAmf0Any*)amf0;
+    
+    return any->human_print(pdata, psize);
+}
+
+const char* srs_human_flv_tag_type2string(char type)
+{
+    static const char* audio = "Audio";
+    static const char* video = "Video";
+    static const char* data = "Data";
+    static const char* unknown = "Unknown";
+    
+    switch (type) {
+        case SRS_RTMP_TYPE_AUDIO: return audio;
+        case SRS_RTMP_TYPE_VIDEO: return video;
+        case SRS_RTMP_TYPE_SCRIPT: return data;
+        default: return unknown;
+    }
+    
+    return unknown;
+}
+
+const char* srs_human_flv_video_codec_id2string(char codec_id)
+{
+    static const char* h263 = "H.263";
+    static const char* screen = "Screen";
+    static const char* vp6 = "VP6";
+    static const char* vp6_alpha = "VP6Alpha";
+    static const char* screen2 = "Screen2";
+    static const char* h264 = "H.264";
+    static const char* unknown = "Unknown";
+    
+    switch (codec_id) {
+        case 2: return h263;
+        case 3: return screen;
+        case 4: return vp6;
+        case 5: return vp6_alpha;
+        case 6: return screen2;
+        case 7: return h264;
+        default: return unknown;
+    }
+    
+    return unknown;
+}
+
+const char* srs_human_flv_video_avc_packet_type2string(char avc_packet_type)
+{
+    static const char* sps_pps = "SH";
+    static const char* nalu = "Nalu";
+    static const char* sps_pps_end = "SpsPpsEnd";
+    static const char* unknown = "Unknown";
+    
+    switch (avc_packet_type) {
+        case 0: return sps_pps;
+        case 1: return nalu;
+        case 2: return sps_pps_end;
+        default: return unknown;
+    }
+    
+    return unknown;
+}
+
+const char* srs_human_flv_video_frame_type2string(char frame_type)
+{
+    static const char* keyframe = "I";
+    static const char* interframe = "P/B";
+    static const char* disposable_interframe = "DI";
+    static const char* generated_keyframe = "GI";
+    static const char* video_infoframe = "VI";
+    static const char* unknown = "Unknown";
+    
+    switch (frame_type) {
+        case 1: return keyframe;
+        case 2: return interframe;
+        case 3: return disposable_interframe;
+        case 4: return generated_keyframe;
+        case 5: return video_infoframe;
+        default: return unknown;
+    }
+    
+    return unknown;
+}
+
+const char* srs_human_flv_audio_sound_format2string(char sound_format)
+{
+    static const char* linear_pcm = "LinearPCM";
+    static const char* ad_pcm = "ADPCM";
+    static const char* mp3 = "MP3";
+    static const char* linear_pcm_le = "LinearPCMLe";
+    static const char* nellymoser_16khz = "NellymoserKHz16";
+    static const char* nellymoser_8khz = "NellymoserKHz8";
+    static const char* nellymoser = "Nellymoser";
+    static const char* g711_a_pcm = "G711APCM";
+    static const char* g711_mu_pcm = "G711MuPCM";
+    static const char* reserved = "Reserved";
+    static const char* aac = "AAC";
+    static const char* speex = "Speex";
+    static const char* mp3_8khz = "MP3KHz8";
+    static const char* device_specific = "DeviceSpecific";
+    static const char* unknown = "Unknown";
+    
+    switch (sound_format) {
+        case 0: return linear_pcm;
+        case 1: return ad_pcm;
+        case 2: return mp3;
+        case 3: return linear_pcm_le;
+        case 4: return nellymoser_16khz;
+        case 5: return nellymoser_8khz;
+        case 6: return nellymoser;
+        case 7: return g711_a_pcm;
+        case 8: return g711_mu_pcm;
+        case 9: return reserved;
+        case 10: return aac;
+        case 11: return speex;
+        case 14: return mp3_8khz;
+        case 15: return device_specific;
+        default: return unknown;
+    }
+    
+    return unknown;
+}
+
+const char* srs_human_flv_audio_sound_rate2string(char sound_rate)
+{
+    static const char* khz_5_5 = "5.5KHz";
+    static const char* khz_11 = "11KHz";
+    static const char* khz_22 = "22KHz";
+    static const char* khz_44 = "44KHz";
+    static const char* unknown = "Unknown";
+    
+    switch (sound_rate) {
+        case 0: return khz_5_5;
+        case 1: return khz_11;
+        case 2: return khz_22;
+        case 3: return khz_44;
+        default: return unknown;
+    }
+    
+    return unknown;
+}
+
+const char* srs_human_flv_audio_sound_size2string(char sound_size)
+{
+    static const char* bit_8 = "8bit";
+    static const char* bit_16 = "16bit";
+    static const char* unknown = "Unknown";
+    
+    switch (sound_size) {
+        case 0: return bit_8;
+        case 1: return bit_16;
+        default: return unknown;
+    }
+    
+    return unknown;
+}
+
+const char* srs_human_flv_audio_sound_type2string(char sound_type)
+{
+    static const char* mono = "Mono";
+    static const char* stereo = "Stereo";
+    static const char* unknown = "Unknown";
+    
+    switch (sound_type) {
+        case 0: return mono;
+        case 1: return stereo;
+        default: return unknown;
+    }
+    
+    return unknown;
+}
+
+const char* srs_human_flv_audio_aac_packet_type2string(char aac_packet_type)
+{
+    static const char* sps_pps = "SH";
+    static const char* raw = "Raw";
+    static const char* unknown = "Unknown";
+    
+    switch (aac_packet_type) {
+        case 0: return sps_pps;
+        case 1: return raw;
+        default: return unknown;
+    }
+    
+    return unknown;
+}
+
+int srs_human_print_rtmp_packet(char type, u_int32_t timestamp, char* data, int size)
+{
+    int ret = ERROR_SUCCESS;
+    
+    u_int32_t pts;
+    if (srs_utils_parse_timestamp(timestamp, type, data, size, &pts) != 0) {
+        return ret;
+    }
+    
+    if (type == SRS_RTMP_TYPE_VIDEO) {
+        srs_human_trace("Video packet type=%s, dts=%d, pts=%d, size=%d, %s(%s,%s)", 
+            srs_human_flv_tag_type2string(type), timestamp, pts, size,
+            srs_human_flv_video_codec_id2string(srs_utils_flv_video_codec_id(data, size)),
+            srs_human_flv_video_avc_packet_type2string(srs_utils_flv_video_avc_packet_type(data, size)),
+            srs_human_flv_video_frame_type2string(srs_utils_flv_video_frame_type(data, size))
+        );
+    } else if (type == SRS_RTMP_TYPE_AUDIO) {
+        srs_human_trace("Audio packet type=%s, dts=%d, pts=%d, size=%d, %s(%s,%s,%s,%s)", 
+            srs_human_flv_tag_type2string(type), timestamp, pts, size,
+            srs_human_flv_audio_sound_format2string(srs_utils_flv_audio_sound_format(data, size)),
+            srs_human_flv_audio_sound_rate2string(srs_utils_flv_audio_sound_rate(data, size)),
+            srs_human_flv_audio_sound_size2string(srs_utils_flv_audio_sound_size(data, size)),
+            srs_human_flv_audio_sound_type2string(srs_utils_flv_audio_sound_type(data, size)),
+            srs_human_flv_audio_aac_packet_type2string(srs_utils_flv_audio_aac_packet_type(data, size))
+        );
+    } else if (type == SRS_RTMP_TYPE_SCRIPT) {
+        srs_human_verbose("Data packet type=%s, time=%d, size=%d", 
+            srs_human_flv_tag_type2string(type), timestamp, size);
+        int nparsed = 0;
+        while (nparsed < size) {
+            int nb_parsed_this = 0;
+            srs_amf0_t amf0 = srs_amf0_parse(data + nparsed, size - nparsed, &nb_parsed_this);
+            if (amf0 == NULL) {
+                break;
+            }
+            
+            nparsed += nb_parsed_this;
+            
+            char* amf0_str = NULL;
+            srs_human_raw("%s", srs_human_amf0_print(amf0, &amf0_str, NULL));
+            srs_amf0_free_bytes(amf0_str);
+        }
+    } else {
+        srs_human_trace("Unknown packet type=%s, dts=%d, pts=%d, size=%d", 
+            srs_human_flv_tag_type2string(type), timestamp, pts, size);
+    }
+    
+    return ret;
+}
+
+const char* srs_human_format_time()
+{
+    struct timeval tv;
+    static char buf[23];
+    
+    memset(buf, 0, sizeof(buf));
+    
+    // clock time
+    if (gettimeofday(&tv, NULL) == -1) {
+        return buf;
+    }
+    
+    // to calendar time
+    struct tm* tm;
+    if ((tm = localtime((const time_t*)&tv.tv_sec)) == NULL) {
+        return buf;
+    }
+    
+    snprintf(buf, sizeof(buf), 
+        "%d-%02d-%02d %02d:%02d:%02d.%03d", 
+        1900 + tm->tm_year, 1 + tm->tm_mon, tm->tm_mday, 
+        tm->tm_hour, tm->tm_min, tm->tm_sec, 
+        (int)(tv.tv_usec / 1000));
+        
+    // for srs-librtmp, @see https://github.com/winlinvip/simple-rtmp-server/issues/213
+    buf[sizeof(buf) - 1] = 0;
+    
+    return buf;
 }
 
 #ifdef __cplusplus
@@ -18710,22 +19900,22 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 SimpleSocketStream::SimpleSocketStream()
 {
-    fd = -1;
+    SOCKET_RESET(fd);
     send_timeout = recv_timeout = ST_UTIME_NO_TIMEOUT;
     recv_bytes = send_bytes = 0;
+    SOCKET_SETUP();
 }
 
 SimpleSocketStream::~SimpleSocketStream()
 {
-    if (fd != -1) {
-        ::close(fd);
-        fd = -1;
-    }
+    SOCKET_CLOSE(fd);
+    SOCKET_CLEANUP();
 }
 
 int SimpleSocketStream::create_socket()
 {
-    if((fd = ::socket(AF_INET, SOCK_STREAM, 0)) < 0){
+    fd = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (!SOCKET_VALID(fd)) {
         return ERROR_SOCKET_CREATE;
     }
 
@@ -18760,12 +19950,12 @@ int SimpleSocketStream::read(void* buf, size_t size, ssize_t* nread)
     // On success a non-negative integer indicating the number of bytes actually read is returned 
     // (a value of 0 means the network connection is closed or end of file is reached).
     if (nb_read <= 0) {
-        if (nb_read < 0 && errno == ETIME) {
+        if (nb_read < 0 && SOCKET_ERRNO() == SOCKET_ETIME) {
             return ERROR_SOCKET_TIMEOUT;
         }
         
         if (nb_read == 0) {
-            errno = ECONNRESET;
+            errno = SOCKET_ECONNRESET;
         }
         
         return ERROR_SOCKET_READ;
@@ -18823,7 +20013,7 @@ int SimpleSocketStream::writev(const iovec *iov, int iov_size, ssize_t* nwrite)
     // returned, and errno is set appropriately.
     if (nb_write <= 0) {
         // @see https://github.com/winlinvip/simple-rtmp-server/issues/200
-        if (nb_write < 0 && errno == ETIME) {
+        if (nb_write < 0 && SOCKET_ERRNO() == SOCKET_ETIME) {
             return ERROR_SOCKET_TIMEOUT;
         }
         
@@ -18880,7 +20070,7 @@ int SimpleSocketStream::write(void* buf, size_t size, ssize_t* nwrite)
     
     if (nb_write <= 0) {
         // @see https://github.com/winlinvip/simple-rtmp-server/issues/200
-        if (nb_write < 0 && errno == ETIME) {
+        if (nb_write < 0 && SOCKET_ERRNO() == SOCKET_ETIME) {
             return ERROR_SOCKET_TIMEOUT;
         }
         

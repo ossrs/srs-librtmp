@@ -27,10 +27,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef SRS_AUTO_HEADER_HPP
 #define SRS_AUTO_HEADER_HPP
 
-#define SRS_AUTO_BUILD_TS "1417141673"
-#define SRS_AUTO_BUILD_DATE "2014-11-28 10:27:53"
+#define SRS_AUTO_BUILD_TS "1417494098"
+#define SRS_AUTO_BUILD_DATE "2014-12-02 12:21:38"
 #define SRS_AUTO_UNAME "Linux dev6 2.6.32-71.el6.x86_64 #1 SMP Fri May 20 03:51:51 BST 2011 x86_64 x86_64 x86_64 GNU/Linux"
-#define SRS_AUTO_USER_CONFIGURE "--x86-x64  --export-librtmp-single=/home/winlin/git/srs.librtmp/src/srs"
+#define SRS_AUTO_USER_CONFIGURE "--x86-x64  --export-librtmp-single=/home/winlin/srs.librtmp/src/srs/"
 #define SRS_AUTO_CONFIGURE "--prefix=/usr/local/srs --without-hls --without-dvr --without-nginx --without-ssl --without-ffmpeg --without-transcode --without-ingest --without-stat --without-http-callback --without-http-server --without-http-api --with-librtmp --with-research --without-utest --without-gperf --without-gmc --without-gmp --without-gcp --without-gprof --without-arm-ubuntu12 --without-mips-ubuntu12 --log-trace"
 
 #define SRS_AUTO_EMBEDED_TOOL_CHAIN "normal x86/x64 gcc"
@@ -113,7 +113,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // current release version
 #define VERSION_MAJOR       2
 #define VERSION_MINOR       0
-#define VERSION_REVISION    36
+#define VERSION_REVISION    42
 // server info.
 #define RTMP_SIG_SRS_KEY "SRS"
 #define RTMP_SIG_SRS_ROLE "origin/edge server"
@@ -4947,6 +4947,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 class ISrsProtocolReaderWriter;
 class SrsComplexHandshake;
 class SrsHandshakeBytes;
+class SrsStream;
 
 #ifdef SRS_AUTO_SSL
 
@@ -4955,78 +4956,6 @@ class SrsHandshakeBytes;
 
 namespace _srs_internal
 {
-    /**
-    * the schema type.
-    */
-    enum srs_schema_type 
-    {
-        srs_schema_invalid = 2,
-        
-        /**
-        * key-digest sequence
-        */
-        srs_schema0 = 0,
-        
-        /**
-        * digest-key sequence
-        * @remark, FMS requires the schema1(digest-key), or connect failed.
-        */
-        // 
-        srs_schema1 = 1,
-    };
-    
-    /**
-    * 764bytes key structure
-    *     random-data: (offset)bytes
-    *     key-data: 128bytes
-    *     random-data: (764-offset-128-4)bytes
-    *     offset: 4bytes
-    * @see also: http://blog.csdn.net/win_lin/article/details/13006803
-    */
-    class key_block
-    {
-    public:
-        // (offset)bytes
-        char* random0;
-        int random0_size;
-        
-        // 128bytes
-        char key[128];
-        
-        // (764-offset-128-4)bytes
-        char* random1;
-        int random1_size;
-        
-        // 4bytes
-        int32_t offset;
-    };
-    
-    /**
-    * 764bytes digest structure
-    *     offset: 4bytes
-    *     random-data: (offset)bytes
-    *     digest-data: 32bytes
-    *     random-data: (764-4-offset-32)bytes
-    * @see also: http://blog.csdn.net/win_lin/article/details/13006803
-    */
-    class digest_block
-    {
-    public:
-        // 4bytes
-        int32_t offset;
-        
-        // (offset)bytes
-        char* random0;
-        int random0_size;
-        
-        // 32bytes
-        char digest[32];
-        
-        // (764-4-offset-32)bytes
-        char* random1;
-        int random1_size;
-    };
-    
     // the digest key generate size.
     #define __SRS_OpensslHashSize 512
     extern u_int8_t SrsGenuineFMSKey[];
@@ -5073,67 +5002,255 @@ namespace _srs_internal
     private:
         virtual int do_initialize();
     };
+    /**
+    * the schema type.
+    */
+    enum srs_schema_type 
+    {
+        srs_schema_invalid = 2,
+        
+        /**
+        * key-digest sequence
+        */
+        srs_schema0 = 0,
+        
+        /**
+        * digest-key sequence
+        * @remark, FMS requires the schema1(digest-key), or connect failed.
+        */
+        // 
+        srs_schema1 = 1,
+    };
     
-    // calc the offset of key,
-    // the key->offset cannot be used as the offset of key.
-    int srs_key_block_get_offset(key_block* key);
+    /**
+    * 764bytes key structure
+    *     random-data: (offset)bytes
+    *     key-data: 128bytes
+    *     random-data: (764-offset-128-4)bytes
+    *     offset: 4bytes
+    * @see also: http://blog.csdn.net/win_lin/article/details/13006803
+    */
+    class key_block
+    {
+    public:
+        // (offset)bytes
+        char* random0;
+        int random0_size;
+        
+        // 128bytes
+        char key[128];
+        
+        // (764-offset-128-4)bytes
+        char* random1;
+        int random1_size;
+        
+        // 4bytes
+        int32_t offset;
+    public:
+        key_block();
+        virtual ~key_block();
+    public:
+        // parse key block from c1s1.
+        // if created, user must free it by srs_key_block_free
+        // @stream contains c1s1_key_bytes the key start bytes
+        int parse(SrsStream* stream);
+    private:
+        // calc the offset of key,
+        // the key->offset cannot be used as the offset of key.
+        int calc_valid_offset();
+    };
     
-    // create new key block data.
-    // if created, user must free it by srs_key_block_free
-    void srs_key_block_init(key_block* key);
+    /**
+    * 764bytes digest structure
+    *     offset: 4bytes
+    *     random-data: (offset)bytes
+    *     digest-data: 32bytes
+    *     random-data: (764-4-offset-32)bytes
+    * @see also: http://blog.csdn.net/win_lin/article/details/13006803
+    */
+    class digest_block
+    {
+    public:
+        // 4bytes
+        int32_t offset;
+        
+        // (offset)bytes
+        char* random0;
+        int random0_size;
+        
+        // 32bytes
+        char digest[32];
+        
+        // (764-4-offset-32)bytes
+        char* random1;
+        int random1_size;
+    public:
+        digest_block();
+        virtual ~digest_block();
+    public:
+        // parse digest block from c1s1.
+        // if created, user must free it by srs_digest_block_free
+        // @stream contains c1s1_digest_bytes the digest start bytes
+        int parse(SrsStream* stream);
+    private:
+        // calc the offset of digest,
+        // the key->offset cannot be used as the offset of digest.
+        int calc_valid_offset();
+    };
     
-    // parse key block from c1s1.
-    // if created, user must free it by srs_key_block_free
-    // @c1s1_key_bytes the key start bytes, maybe c1s1 or c1s1+764
-    int srs_key_block_parse(key_block* key, char* c1s1_key_bytes);
+    class c1s1;
     
-    // free the block data create by 
-    // srs_key_block_init or srs_key_block_parse
-    void srs_key_block_free(key_block* key);
+    /**
+    * the c1s1 strategy, use schema0 or schema1.
+    * the template method class to defines common behaviors,
+    * while the concrete class to implements in schema0 or schema1.
+    */
+    class c1s1_strategy
+    {
+    protected:
+        key_block key;
+        digest_block digest;
+    public:
+        c1s1_strategy();
+        virtual ~c1s1_strategy();
+    public:
+        /**
+        * get the scema.
+        */
+        virtual srs_schema_type schema() = 0;
+        /**
+        * get the digest.
+        */
+        virtual char* get_digest();
+        /**
+        * get the key.
+        */
+        virtual char* get_key();
+        /**
+        * copy to bytes.
+        * @param size must be 1536.
+        */
+        virtual int dump(c1s1* owner, char* _c1s1, int size);
+        /**
+        * server: parse the c1s1, discovery the key and digest by schema.
+        * use the c1_validate_digest() to valid the digest of c1.
+        */
+        virtual int parse(char* _c1s1, int size) = 0;
+    public:
+        /**
+        * client: create and sign c1 by schema.
+        * sign the c1, generate the digest.
+        *         calc_c1_digest(c1, schema) {
+        *            get c1s1-joined from c1 by specified schema
+        *            digest-data = HMACsha256(c1s1-joined, FPKey, 30)
+        *            return digest-data;
+        *        }
+        *        random fill 1536bytes c1 // also fill the c1-128bytes-key
+        *        time = time() // c1[0-3]
+        *        version = [0x80, 0x00, 0x07, 0x02] // c1[4-7]
+        *        schema = choose schema0 or schema1
+        *        digest-data = calc_c1_digest(c1, schema)
+        *        copy digest-data to c1
+        */
+        virtual int c1_create(c1s1* owner);
+        /**
+        * server: validate the parsed c1 schema
+        */
+        virtual int c1_validate_digest(c1s1* owner, bool& is_valid);
+        /**
+        * server: create and sign the s1 from c1.
+        *       // decode c1 try schema0 then schema1
+        *       c1-digest-data = get-c1-digest-data(schema0)
+        *       if c1-digest-data equals to calc_c1_digest(c1, schema0) {  
+        *           c1-key-data = get-c1-key-data(schema0)  
+        *           schema = schema0
+        *       } else {  
+        *           c1-digest-data = get-c1-digest-data(schema1)  
+        *           if c1-digest-data not equals to calc_c1_digest(c1, schema1) {
+        *               switch to simple handshake.  
+        *               return  
+        *           }
+        *           c1-key-data = get-c1-key-data(schema1)  
+        *           schema = schema1
+        *       }
+        * 
+        *       // generate s1
+        *       random fill 1536bytes s1
+        *       time = time() // c1[0-3]
+        *       version = [0x04, 0x05, 0x00, 0x01] // s1[4-7]
+        *       s1-key-data=shared_key=DH_compute_key(peer_pub_key=c1-key-data)
+        *       get c1s1-joined by specified schema
+        *       s1-digest-data = HMACsha256(c1s1-joined, FMSKey, 36)
+        *       copy s1-digest-data and s1-key-data to s1.
+        * @param c1, to get the peer_pub_key of client.
+        */
+        virtual int s1_create(c1s1* owner, c1s1* c1);
+        /**
+        * server: validate the parsed s1 schema
+        */
+        virtual int s1_validate_digest(c1s1* owner, bool& is_valid);
+    public:
+        /**
+        * calc the digest for c1
+        */
+        virtual int calc_c1_digest(c1s1* owner, char*& c1_digest);
+        /**
+        * calc the digest for s1
+        */
+        virtual int calc_s1_digest(c1s1* owner, char*& s1_digest);
+        /**
+        * copy whole c1s1 to bytes.
+        * @param size must always be 1536 with digest, and 1504 without digest.
+        */
+        virtual int copy_to(c1s1* owner, char* bytes, int size, bool with_digest) = 0;
+        /**
+        * copy time and version to stream.
+        */
+        virtual void copy_time_version(SrsStream* stream, c1s1* owner);
+        /**
+        * copy key to stream.
+        */
+        virtual void copy_key(SrsStream* stream);
+        /**
+        * copy digest to stream.
+        */
+        virtual void copy_digest(SrsStream* stream, bool with_digest);
+    };
     
-    // calc the offset of digest,
-    // the key->offset cannot be used as the offset of digest.
-    int srs_digest_block_get_offset(digest_block* digest);
+    /**
+    * c1s1 schema0
+    *     key: 764bytes
+    *     digest: 764bytes
+    */
+    class c1s1_strategy_schema0 : public c1s1_strategy
+    {
+    public:
+        c1s1_strategy_schema0();
+        virtual ~c1s1_strategy_schema0();
+    public:
+        virtual srs_schema_type schema();
+        virtual int parse(char* _c1s1, int size);
+    public:
+        virtual int copy_to(c1s1* owner, char* bytes, int size, bool with_digest);
+    };
     
-    // create new digest block data.
-    // if created, user must free it by srs_digest_block_free
-    void srs_digest_block_init(digest_block* digest);
+    /**
+    * c1s1 schema1
+    *     digest: 764bytes
+    *     key: 764bytes
+    */
+    class c1s1_strategy_schema1 : public c1s1_strategy
+    {
+    public:
+        c1s1_strategy_schema1();
+        virtual ~c1s1_strategy_schema1();
+    public:
+        virtual srs_schema_type schema();
+        virtual int parse(char* _c1s1, int size);
+    public:
+        virtual int copy_to(c1s1* owner, char* bytes, int size, bool with_digest);
+    };
 
-    // parse digest block from c1s1.
-    // if created, user must free it by srs_digest_block_free
-    // @c1s1_digest_bytes the digest start bytes, maybe c1s1 or c1s1+764
-    int srs_digest_block_parse(digest_block* digest, char* c1s1_digest_bytes);
-    
-    // free the block data create by 
-    // srs_digest_block_init or srs_digest_block_parse
-    void srs_digest_block_free(digest_block* digest);
-    
-    /**
-    * copy whole c1s1 to bytes.
-    */
-    void srs_schema0_copy_to(char* bytes, bool with_digest, 
-        int32_t time, int32_t version, key_block* key, digest_block* digest);
-    void srs_schema1_copy_to(char* bytes, bool with_digest, 
-        int32_t time, int32_t version, digest_block* digest, key_block* key);
-    
-    /**
-    * c1s1 is splited by digest:
-    *     c1s1-part1: n bytes (time, version, key and digest-part1).
-    *     digest-data: 32bytes
-    *     c1s1-part2: (1536-n-32)bytes (digest-part2)
-    * @return a new allocated bytes, user must free it.
-    */
-    char* srs_bytes_join_schema0(int32_t time, int32_t version, key_block* key, digest_block* digest);
-    
-    /**
-    * c1s1 is splited by digest:
-    *     c1s1-part1: n bytes (time, version and digest-part1).
-    *     digest-data: 32bytes
-    *     c1s1-part2: (1536-n-32)bytes (digest-part2 and key)
-    * @return a new allocated bytes, user must free it.
-    */
-    char* srs_bytes_join_schema1(int32_t time, int32_t version, digest_block* digest, key_block* key);
-    
     /**
     * c1s1 schema0
     *     time: 4bytes
@@ -5150,43 +5267,42 @@ namespace _srs_internal
     class c1s1
     {
     public:
-        union block {
-            key_block key; 
-            digest_block digest; 
-        };
-        
         // 4bytes
         int32_t time;
         // 4bytes
         int32_t version;
-        // 764bytes
-        // if schema0, use key
-        // if schema1, use digest
-        block block0;
-        // 764bytes
-        // if schema0, use digest
-        // if schema1, use key
-        block block1;
-        
-        // the logic schema
-        srs_schema_type schema;
-        
+        // 764bytes+764bytes
+        c1s1_strategy* payload;
+    public:
         c1s1();
         virtual ~c1s1();
+    public:
+        /**
+        * get the scema.
+        */
+        virtual srs_schema_type schema();
         /**
         * get the digest key.
         */
         virtual char* get_digest();
         /**
-        * copy to bytes.
+        * get the key.
         */
-        virtual void dump(char* _c1s1);
+        virtual char* get_key();
+    public:
+        /**
+        * copy to bytes.
+        * @param size, must always be 1536.
+        */
+        virtual int dump(char* _c1s1, int size);
         /**
         * server: parse the c1s1, discovery the key and digest by schema.
+        * @param size, must always be 1536.
         * use the c1_validate_digest() to valid the digest of c1.
+        * use the s1_validate_digest() to valid the digest of s1.
         */
-        virtual int parse(char* _c1s1, srs_schema_type _schema);
-        
+        virtual int parse(char* _c1s1, int size, srs_schema_type _schema);
+    public:
         /**
         * client: create and sign c1 by schema.
         * sign the c1, generate the digest.
@@ -5207,18 +5323,38 @@ namespace _srs_internal
         * server: validate the parsed c1 schema
         */
         virtual int c1_validate_digest(bool& is_valid);
+    public:
         /**
         * server: create and sign the s1 from c1.
+        *       // decode c1 try schema0 then schema1
+        *       c1-digest-data = get-c1-digest-data(schema0)
+        *       if c1-digest-data equals to calc_c1_digest(c1, schema0) {  
+        *           c1-key-data = get-c1-key-data(schema0)  
+        *           schema = schema0
+        *       } else {  
+        *           c1-digest-data = get-c1-digest-data(schema1)  
+        *           if c1-digest-data not equals to calc_c1_digest(c1, schema1) {
+        *               switch to simple handshake.  
+        *               return  
+        *           }
+        *           c1-key-data = get-c1-key-data(schema1)  
+        *           schema = schema1
+        *       }
+        * 
+        *       // generate s1
+        *       random fill 1536bytes s1
+        *       time = time() // c1[0-3]
+        *       version = [0x04, 0x05, 0x00, 0x01] // s1[4-7]
+        *       s1-key-data=shared_key=DH_compute_key(peer_pub_key=c1-key-data)
+        *       get c1s1-joined by specified schema
+        *       s1-digest-data = HMACsha256(c1s1-joined, FMSKey, 36)
+        *       copy s1-digest-data and s1-key-data to s1.
         */
         virtual int s1_create(c1s1* c1);
         /**
         * server: validate the parsed s1 schema
         */
         virtual int s1_validate_digest(bool& is_valid);
-    private:
-        virtual int calc_s1_digest(char*& digest);
-        virtual int calc_c1_digest(char*& digest);
-        virtual void destroy_blocks();
     };
     
     /**
@@ -5232,19 +5368,21 @@ namespace _srs_internal
     public:
         char random[1504];
         char digest[32];
-        
+    public:
         c2s2();
         virtual ~c2s2();
-        
+    public:
         /**
         * copy to bytes.
+        * @param size, must always be 1536.
         */
-        virtual void dump(char* _c2s2);
+        virtual int dump(char* _c2s2, int size);
         /**
         * parse the c2s2
+        * @param size, must always be 1536.
         */
-        virtual void parse(char* _c2s2);
-    
+        virtual int parse(char* _c2s2, int size);
+    public:
         /**
         * create c2.
         * random fill c2s2 1536 bytes
@@ -5259,7 +5397,7 @@ namespace _srs_internal
         * validate the c2 from client.
         */
         virtual int c2_validate(c1s1* s1, bool& is_valid);
-        
+    public:
         /**
         * create s2.
         * random fill c2s2 1536 bytes
@@ -6428,6 +6566,93 @@ extern const char* srs_human_format_time();
 #define srs_human_verbose(msg, ...) printf("[%s] ", srs_human_format_time());printf(msg, ##__VA_ARGS__);printf("\n")
 #define srs_human_raw(msg, ...) printf(msg, ##__VA_ARGS__)
 
+/*************************************************************
+**************************************************************
+* IO hijack, use your specified io functions.
+**************************************************************
+*************************************************************/
+// the void* will convert to your handler for io hijack.
+typedef void* srs_hijack_io_t;
+// define the following macro and functions in your module to hijack the io.
+// the example @see https://github.com/winlinvip/st-load
+// which use librtmp but use its own io(use st also).
+#ifdef SRS_HIJACK_IO
+    /**
+    * create hijack.
+    * @return NULL for error; otherwise, ok.
+    */
+    extern srs_hijack_io_t srs_hijack_io_create();
+    /**
+    * destroy the context, user must close the socket.
+    */
+    extern void srs_hijack_io_destroy(srs_hijack_io_t ctx);
+    /**
+    * create socket, not connect yet.
+    * @return 0, success; otherswise, failed.
+    */
+    extern int srs_hijack_io_create_socket(srs_hijack_io_t ctx);
+    /**
+    * connect socket at server_ip:port.
+    * @return 0, success; otherswise, failed.
+    */
+    extern int srs_hijack_io_connect(srs_hijack_io_t ctx, const char* server_ip, int port);
+    /**
+    * read from socket.
+    * @return 0, success; otherswise, failed.
+    */
+    extern int srs_hijack_io_read(srs_hijack_io_t ctx, void* buf, size_t size, ssize_t* nread);
+    /**
+    * set the socket recv timeout.
+    * @return 0, success; otherswise, failed.
+    */
+    extern void srs_hijack_io_set_recv_timeout(srs_hijack_io_t ctx, int64_t timeout_us);
+    /**
+    * get the socket recv timeout.
+    * @return 0, success; otherswise, failed.
+    */
+    extern int64_t srs_hijack_io_get_recv_timeout(srs_hijack_io_t ctx);
+    /**
+    * get the socket recv bytes.
+    * @return 0, success; otherswise, failed.
+    */
+    extern int64_t srs_hijack_io_get_recv_bytes(srs_hijack_io_t ctx);
+    /**
+    * set the socket send timeout.
+    * @return 0, success; otherswise, failed.
+    */
+    extern void srs_hijack_io_set_send_timeout(srs_hijack_io_t ctx, int64_t timeout_us);
+    /**
+    * get the socket send timeout.
+    * @return 0, success; otherswise, failed.
+    */
+    extern int64_t srs_hijack_io_get_send_timeout(srs_hijack_io_t ctx);
+    /**
+    * get the socket send bytes.
+    * @return 0, success; otherswise, failed.
+    */
+    extern int64_t srs_hijack_io_get_send_bytes(srs_hijack_io_t ctx);
+    /**
+    * writev of socket.
+    * @return 0, success; otherswise, failed.
+    */
+    extern int srs_hijack_io_writev(srs_hijack_io_t ctx, const iovec *iov, int iov_size, ssize_t* nwrite);
+    /**
+    * whether the timeout is never timeout.
+    * @return 0, success; otherswise, failed.
+    */
+    extern bool srs_hijack_io_is_never_timeout(srs_hijack_io_t ctx, int64_t timeout_us);
+    /**
+    * read fully, fill the buf exactly size bytes.
+    * @return 0, success; otherswise, failed.
+    */
+    extern int srs_hijack_io_read_fully(srs_hijack_io_t ctx, void* buf, size_t size, ssize_t* nread);
+    /**
+    * write bytes to socket.
+    * @return 0, success; otherswise, failed.
+    */
+    extern int srs_hijack_io_write(srs_hijack_io_t ctx, void* buf, size_t size, ssize_t* nwrite);
+#endif
+
 #ifdef __cplusplus
 }
 #endif
@@ -6469,7 +6694,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 //#include <srs_protocol_io.hpp>
 //#include <srs_librtmp.hpp>
-    
+
 /**
 * simple socket stream,
 * use tcp socket, sync block mode, for client like srs-librtmp.
@@ -6477,11 +6702,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 class SimpleSocketStream : public ISrsProtocolReaderWriter
 {
 private:
-    int64_t recv_timeout;
-    int64_t send_timeout;
-    int64_t recv_bytes;
-    int64_t send_bytes;
-    SOCKET fd;
+    srs_hijack_io_t io;
 public:
     SimpleSocketStream();
     virtual ~SimpleSocketStream();
@@ -16112,334 +16333,669 @@ namespace _srs_internal
         return ret;
     }
     
-    // read/write stream using SrsStream.
-    void __srs_stream_write_4bytes(char* pp, int32_t value) 
+    key_block::key_block()
     {
-        static SrsStream stream;
+        offset = (int32_t)rand();
+        random0 = NULL;
+        random1 = NULL;
         
-        int ret = stream.initialize(pp, 4);
-        srs_assert(ret == ERROR_SUCCESS);
+        int valid_offset = calc_valid_offset();
+        srs_assert(valid_offset >= 0);
         
-        stream.write_4bytes(value);
-    }
-    int32_t __srs_stream_read_4bytes(char* pp)
-    {
-        static SrsStream stream;
+        random0_size = valid_offset;
+        if (random0_size > 0) {
+            random0 = new char[random0_size];
+            srs_random_generate(random0, random0_size);
+            snprintf(random0, random0_size, "%s", RTMP_SIG_SRS_HANDSHAKE);
+        }
         
-        int ret = stream.initialize(pp, 4);
-        srs_assert(ret == ERROR_SUCCESS);
+        srs_random_generate(key, sizeof(key));
         
-        return stream.read_4bytes();
+        random1_size = 764 - valid_offset - 128 - 4;
+        if (random1_size > 0) {
+            random1 = new char[random1_size];
+            srs_random_generate(random1, random1_size);
+            snprintf(random1, random1_size, "%s", RTMP_SIG_SRS_HANDSHAKE);
+        }
     }
     
-    // calc the offset of key,
-    // the key->offset cannot be used as the offset of key.
-    int srs_key_block_get_offset(key_block* key)
+    key_block::~key_block()
+    {
+        srs_freep(random0);
+        srs_freep(random1);
+    }
+    
+    int key_block::parse(SrsStream* stream)
+    {
+        int ret = ERROR_SUCCESS;
+        
+        // the key must be 764 bytes.
+        srs_assert(stream->require(764));
+    
+        // read the last offset first, 760-763
+        stream->skip(764 - sizeof(int32_t));
+        offset = stream->read_4bytes();
+        
+        // reset stream to read others.
+        stream->skip(-764);
+        
+        int valid_offset = calc_valid_offset();
+        srs_assert(valid_offset >= 0);
+        
+        random0_size = valid_offset;
+        if (random0_size > 0) {
+            srs_freep(random0);
+            random0 = new char[random0_size];
+            stream->read_bytes(random0, random0_size);
+        }
+        
+        stream->read_bytes(key, 128);
+        
+        random1_size = 764 - valid_offset - 128 - 4;
+        if (random1_size > 0) {
+            srs_freep(random1);
+            random1 = new char[random1_size];
+            stream->read_bytes(random1, random1_size);
+        }
+        
+        return ret;
+    }
+    
+    int key_block::calc_valid_offset()
     {
         int max_offset_size = 764 - 128 - 4;
         
-        int offset = 0;
-        u_int8_t* pp = (u_int8_t*)&key->offset;
-        offset += *pp++;
-        offset += *pp++;
-        offset += *pp++;
-        offset += *pp++;
+        int valid_offset = 0;
+        u_int8_t* pp = (u_int8_t*)&offset;
+        valid_offset += *pp++;
+        valid_offset += *pp++;
+        valid_offset += *pp++;
+        valid_offset += *pp++;
     
-        return offset % max_offset_size;
+        return valid_offset % max_offset_size;
     }
     
-    // create new key block data.
-    // if created, user must free it by srs_key_block_free
-    void srs_key_block_init(key_block* key)
+    digest_block::digest_block()
     {
-        key->offset = (int32_t)rand();
-        key->random0 = NULL;
-        key->random1 = NULL;
+        offset = (int32_t)rand();
+        random0 = NULL;
+        random1 = NULL;
         
-        int offset = srs_key_block_get_offset(key);
-        srs_assert(offset >= 0);
+        int valid_offset = calc_valid_offset();
+        srs_assert(valid_offset >= 0);
         
-        key->random0_size = offset;
-        if (key->random0_size > 0) {
-            key->random0 = new char[key->random0_size];
-            srs_random_generate(key->random0, key->random0_size);
-            snprintf(key->random0, key->random0_size, "%s", RTMP_SIG_SRS_HANDSHAKE);
+        random0_size = valid_offset;
+        if (random0_size > 0) {
+            random0 = new char[random0_size];
+            srs_random_generate(random0, random0_size);
+            snprintf(random0, random0_size, "%s", RTMP_SIG_SRS_HANDSHAKE);
         }
         
-        srs_random_generate(key->key, sizeof(key->key));
+        srs_random_generate(digest, sizeof(digest));
         
-        key->random1_size = 764 - offset - 128 - 4;
-        if (key->random1_size > 0) {
-            key->random1 = new char[key->random1_size];
-            srs_random_generate(key->random1, key->random1_size);
-            snprintf(key->random1, key->random1_size, "%s", RTMP_SIG_SRS_HANDSHAKE);
+        random1_size = 764 - 4 - valid_offset - 32;
+        if (random1_size > 0) {
+            random1 = new char[random1_size];
+            srs_random_generate(random1, random1_size);
+            snprintf(random1, random1_size, "%s", RTMP_SIG_SRS_HANDSHAKE);
         }
     }
     
-    // parse key block from c1s1.
-    // if created, user must free it by srs_key_block_free
-    // @c1s1_key_bytes the key start bytes, maybe c1s1 or c1s1+764
-    int srs_key_block_parse(key_block* key, char* c1s1_key_bytes)
+    digest_block::~digest_block()
+    {
+        srs_freep(random0);
+        srs_freep(random1);
+    }
+
+    int digest_block::parse(SrsStream* stream)
     {
         int ret = ERROR_SUCCESS;
-    
-        char* pp = c1s1_key_bytes + 764;
         
-        pp -= sizeof(int32_t);
-        key->offset = __srs_stream_read_4bytes(pp);
+        // the digest must be 764 bytes.
+        srs_assert(stream->require(764));
         
-        key->random0 = NULL;
-        key->random1 = NULL;
+        offset = stream->read_4bytes();
         
-        int offset = srs_key_block_get_offset(key);
-        srs_assert(offset >= 0);
+        int valid_offset = calc_valid_offset();
+        srs_assert(valid_offset >= 0);
         
-        pp = c1s1_key_bytes;
-        key->random0_size = offset;
-        if (key->random0_size > 0) {
-            key->random0 = new char[key->random0_size];
-            memcpy(key->random0, pp, key->random0_size);
+        random0_size = valid_offset;
+        if (random0_size > 0) {
+            srs_freep(random0);
+            random0 = new char[random0_size];
+            stream->read_bytes(random0, random0_size);
         }
-        pp += key->random0_size;
         
-        memcpy(key->key, pp, sizeof(key->key));
-        pp += sizeof(key->key);
+        stream->read_bytes(digest, 32);
         
-        key->random1_size = 764 - offset - 128 - 4;
-        if (key->random1_size > 0) {
-            key->random1 = new char[key->random1_size];
-            memcpy(key->random1, pp, key->random1_size);
+        random1_size = 764 - 4 - valid_offset - 32;
+        if (random1_size > 0) {
+            srs_freep(random1);
+            random1 = new char[random1_size];
+            stream->read_bytes(random1, random1_size);
         }
         
         return ret;
     }
     
-    // free the block data create by 
-    // srs_key_block_init or srs_key_block_parse
-    void srs_key_block_free(key_block* key)
-    {
-        if (key->random0) {
-            srs_freep(key->random0);
-        }
-        if (key->random1) {
-            srs_freep(key->random1);
-        }
-    }
-    
-    // calc the offset of digest,
-    // the key->offset cannot be used as the offset of digest.
-    int srs_digest_block_get_offset(digest_block* digest)
+    int digest_block::calc_valid_offset()
     {
         int max_offset_size = 764 - 32 - 4;
         
-        int offset = 0;
-        u_int8_t* pp = (u_int8_t*)&digest->offset;
-        offset += *pp++;
-        offset += *pp++;
-        offset += *pp++;
-        offset += *pp++;
+        int valid_offset = 0;
+        u_int8_t* pp = (u_int8_t*)&offset;
+        valid_offset += *pp++;
+        valid_offset += *pp++;
+        valid_offset += *pp++;
+        valid_offset += *pp++;
     
-        return offset % max_offset_size;
+        return valid_offset % max_offset_size;
     }
     
-    // create new digest block data.
-    // if created, user must free it by srs_digest_block_free
-    void srs_digest_block_init(digest_block* digest)
+    c1s1_strategy::c1s1_strategy()
     {
-        digest->offset = (int32_t)rand();
-        digest->random0 = NULL;
-        digest->random1 = NULL;
-        
-        int offset = srs_digest_block_get_offset(digest);
-        srs_assert(offset >= 0);
-        
-        digest->random0_size = offset;
-        if (digest->random0_size > 0) {
-            digest->random0 = new char[digest->random0_size];
-            srs_random_generate(digest->random0, digest->random0_size);
-            snprintf(digest->random0, digest->random0_size, "%s", RTMP_SIG_SRS_HANDSHAKE);
-        }
-        
-        srs_random_generate(digest->digest, sizeof(digest->digest));
-        
-        digest->random1_size = 764 - 4 - offset - 32;
-        if (digest->random1_size > 0) {
-            digest->random1 = new char[digest->random1_size];
-            srs_random_generate(digest->random1, digest->random1_size);
-            snprintf(digest->random1, digest->random1_size, "%s", RTMP_SIG_SRS_HANDSHAKE);
-        }
     }
-
-    // parse digest block from c1s1.
-    // if created, user must free it by srs_digest_block_free
-    // @c1s1_digest_bytes the digest start bytes, maybe c1s1 or c1s1+764
-    int srs_digest_block_parse(digest_block* digest, char* c1s1_digest_bytes)
+    
+    c1s1_strategy::~c1s1_strategy()
+    {
+    }
+    
+    char* c1s1_strategy::get_digest()
+    {
+        return digest.digest;
+    }
+    
+    char* c1s1_strategy::get_key()
+    {
+        return key.key;
+    }
+    
+    int c1s1_strategy::dump(c1s1* owner, char* _c1s1, int size)
+    {
+        srs_assert(size == 1536);
+        return copy_to(owner, _c1s1, size, true);
+    }
+    
+    int c1s1_strategy::c1_create(c1s1* owner)
     {
         int ret = ERROR_SUCCESS;
-    
-        char* pp = c1s1_digest_bytes;
         
-        digest->offset = __srs_stream_read_4bytes(pp);
-        pp += sizeof(int32_t);
+        // generate digest
+        char* c1_digest = NULL;
         
-        digest->random0 = NULL;
-        digest->random1 = NULL;
-        
-        int offset = srs_digest_block_get_offset(digest);
-        srs_assert(offset >= 0);
-        
-        digest->random0_size = offset;
-        if (digest->random0_size > 0) {
-            digest->random0 = new char[digest->random0_size];
-            memcpy(digest->random0, pp, digest->random0_size);
+        if ((ret = calc_c1_digest(owner, c1_digest)) != ERROR_SUCCESS) {
+            srs_error("sign c1 error, failed to calc digest. ret=%d", ret);
+            return ret;
         }
-        pp += digest->random0_size;
         
-        memcpy(digest->digest, pp, sizeof(digest->digest));
-        pp += sizeof(digest->digest);
+        srs_assert(c1_digest != NULL);
+        SrsAutoFree(char, c1_digest);
         
-        digest->random1_size = 764 - 4 - offset - 32;
-        if (digest->random1_size > 0) {
-            digest->random1 = new char[digest->random1_size];
-            memcpy(digest->random1, pp, digest->random1_size);
-        }
+        memcpy(digest.digest, c1_digest, 32);
         
         return ret;
     }
     
-    // free the block data create by 
-    // srs_digest_block_init or srs_digest_block_parse
-    void srs_digest_block_free(digest_block* digest)
+    int c1s1_strategy::c1_validate_digest(c1s1* owner, bool& is_valid)
     {
-        if (digest->random0) {
-            srs_freep(digest->random0);
+        int ret = ERROR_SUCCESS;
+        
+        char* c1_digest = NULL;
+        
+        if ((ret = calc_c1_digest(owner, c1_digest)) != ERROR_SUCCESS) {
+            srs_error("validate c1 error, failed to calc digest. ret=%d", ret);
+            return ret;
         }
-        if (digest->random1) {
-            srs_freep(digest->random1);
-        }
+        
+        srs_assert(c1_digest != NULL);
+        SrsAutoFree(char, c1_digest);
+        
+        is_valid = srs_bytes_equals(digest.digest, c1_digest, 32);
+        
+        return ret;
     }
     
-    void __srs_time_copy_to(char*& pp, int32_t time)
+    int c1s1_strategy::s1_create(c1s1* owner, c1s1* c1)
     {
+        int ret = ERROR_SUCCESS;
+
+        SrsDH dh;
+        
+        // ensure generate 128bytes public key.
+        if ((ret = dh.initialize(true)) != ERROR_SUCCESS) {
+            return ret;
+        }
+        
+        // directly generate the public key.
+        // @see: https://github.com/winlinvip/simple-rtmp-server/issues/148
+        int pkey_size = 128;
+        if ((ret = dh.copy_shared_key(c1->get_key(), 128, key.key, pkey_size)) != ERROR_SUCCESS) {
+            srs_error("calc s1 key failed. ret=%d", ret);
+            return ret;
+        }
+
+        // altough the public key is always 128bytes, but the share key maybe not.
+        // we just ignore the actual key size, but if need to use the key, must use the actual size.
+        // TODO: FIXME: use the actual key size.
+        //srs_assert(pkey_size == 128);
+        srs_verbose("calc s1 key success.");
+            
+        char* s1_digest = NULL;
+        if ((ret = calc_s1_digest(owner, s1_digest))  != ERROR_SUCCESS) {
+            srs_error("calc s1 digest failed. ret=%d", ret);
+            return ret;
+        }
+        srs_verbose("calc s1 digest success.");
+        
+        srs_assert(s1_digest != NULL);
+        SrsAutoFree(char, s1_digest);
+        
+        memcpy(digest.digest, s1_digest, 32);
+        srs_verbose("copy s1 key success.");
+        
+        return ret;
+    }
+    
+    int c1s1_strategy::s1_validate_digest(c1s1* owner, bool& is_valid)
+    {
+        int ret = ERROR_SUCCESS;
+        
+        char* s1_digest = NULL;
+        
+        if ((ret = calc_s1_digest(owner, s1_digest)) != ERROR_SUCCESS) {
+            srs_error("validate s1 error, failed to calc digest. ret=%d", ret);
+            return ret;
+        }
+        
+        srs_assert(s1_digest != NULL);
+        SrsAutoFree(char, s1_digest);
+        
+        is_valid = srs_bytes_equals(digest.digest, s1_digest, 32);
+        
+        return ret;
+    }
+    
+    int c1s1_strategy::calc_c1_digest(c1s1* owner, char*& c1_digest)
+    {
+        int ret = ERROR_SUCCESS;
+
+        /**
+        * c1s1 is splited by digest:
+        *     c1s1-part1: n bytes (time, version, key and digest-part1).
+        *     digest-data: 32bytes
+        *     c1s1-part2: (1536-n-32)bytes (digest-part2)
+        * @return a new allocated bytes, user must free it.
+        */
+        char* c1s1_joined_bytes = new char[1536 -32];
+        SrsAutoFree(char, c1s1_joined_bytes);
+        if ((ret = copy_to(owner, c1s1_joined_bytes, 1536 - 32, false)) != ERROR_SUCCESS) {
+            return ret;
+        }
+        
+        c1_digest = new char[__SRS_OpensslHashSize];
+        if ((ret = openssl_HMACsha256(SrsGenuineFPKey, 30, c1s1_joined_bytes, 1536 - 32, c1_digest)) != ERROR_SUCCESS) {
+            srs_freep(c1_digest);
+            srs_error("calc digest for c1 failed. ret=%d", ret);
+            return ret;
+        }
+        srs_verbose("digest calculated for c1");
+        
+        return ret;
+    }
+    
+    int c1s1_strategy::calc_s1_digest(c1s1* owner, char*& s1_digest)
+    {
+        int ret = ERROR_SUCCESS;
+
+        /**
+        * c1s1 is splited by digest:
+        *     c1s1-part1: n bytes (time, version, key and digest-part1).
+        *     digest-data: 32bytes
+        *     c1s1-part2: (1536-n-32)bytes (digest-part2)
+        * @return a new allocated bytes, user must free it.
+        */
+        char* c1s1_joined_bytes = new char[1536 -32];
+        SrsAutoFree(char, c1s1_joined_bytes);
+        if ((ret = copy_to(owner, c1s1_joined_bytes, 1536 - 32, false)) != ERROR_SUCCESS) {
+            return ret;
+        }
+        
+        s1_digest = new char[__SRS_OpensslHashSize];
+        if ((ret = openssl_HMACsha256(SrsGenuineFMSKey, 36, c1s1_joined_bytes, 1536 - 32, s1_digest)) != ERROR_SUCCESS) {
+            srs_freep(s1_digest);
+            srs_error("calc digest for s1 failed. ret=%d", ret);
+            return ret;
+        }
+        srs_verbose("digest calculated for s1");
+
+        return ret;
+    }
+    
+    void c1s1_strategy::copy_time_version(SrsStream* stream, c1s1* owner)
+    {
+        srs_assert(stream->require(8));
+        
         // 4bytes time
-        __srs_stream_write_4bytes(pp, time);
-        pp += 4;
-    }
-    void __srs_version_copy_to(char*& pp, int32_t version)
-    {
+        stream->write_4bytes(owner->time);
+
         // 4bytes version
-        __srs_stream_write_4bytes(pp, version);
-        pp += 4;
+        stream->write_4bytes(owner->version);
     }
-    void __srs_key_copy_to(char*& pp, key_block* key)
+    void c1s1_strategy::copy_key(SrsStream* stream)
     {
+        srs_assert(key.random0_size >= 0);
+        srs_assert(key.random1_size >= 0);
+        
+        int total = key.random0_size + 128 + key.random1_size + 4;
+        srs_assert(stream->require(total));
+        
         // 764bytes key block
-        if (key->random0_size > 0) {
-            memcpy(pp, key->random0, key->random0_size);
+        if (key.random0_size > 0) {
+            stream->write_bytes(key.random0, key.random0_size);
         }
-        pp += key->random0_size;
         
-        memcpy(pp, key->key, sizeof(key->key));
-        pp += sizeof(key->key);
+        stream->write_bytes(key.key, 128);
         
-        if (key->random1_size > 0) {
-            memcpy(pp, key->random1, key->random1_size);
+        if (key.random1_size > 0) {
+            stream->write_bytes(key.random1, key.random1_size);
         }
-        pp += key->random1_size;
         
-        __srs_stream_write_4bytes(pp, key->offset);
-        pp += 4;
+        stream->write_4bytes(key.offset);
     }
-    void __srs_digest_copy_to(char*& pp, digest_block* digest, bool with_digest)
+    void c1s1_strategy::copy_digest(SrsStream* stream, bool with_digest)
     {
+        srs_assert(key.random0_size >= 0);
+        srs_assert(key.random1_size >= 0);
+        
+        int total = 4 + digest.random0_size + digest.random1_size;
+        if (with_digest) {
+            total += 32;
+        }
+        srs_assert(stream->require(total));
+        
         // 732bytes digest block without the 32bytes digest-data
         // nbytes digest block part1
-        __srs_stream_write_4bytes(pp, digest->offset);
-        pp += 4;
+        stream->write_4bytes(digest.offset);
         
         // digest random padding.
-        if (digest->random0_size > 0) {
-            memcpy(pp, digest->random0, digest->random0_size);
+        if (digest.random0_size > 0) {
+            stream->write_bytes(digest.random0, digest.random0_size);
         }
-        pp += digest->random0_size;
         
         // digest
         if (with_digest) {
-            memcpy(pp, digest->digest, 32);
-            pp += 32;
+            stream->write_bytes(digest.digest, 32);
         }
         
         // nbytes digest block part2
-        if (digest->random1_size > 0) {
-            memcpy(pp, digest->random1, digest->random1_size);
+        if (digest.random1_size > 0) {
+            stream->write_bytes(digest.random1, digest.random1_size);
         }
-        pp += digest->random1_size;
     }
     
-    /**
-    * copy whole c1s1 to bytes.
-    */
-    void srs_schema0_copy_to(char* bytes, bool with_digest, 
-        int32_t time, int32_t version, key_block* key, digest_block* digest)
+    c1s1_strategy_schema0::c1s1_strategy_schema0()
     {
-        char* pp = bytes;
+    }
     
-        __srs_time_copy_to(pp, time);
-        __srs_version_copy_to(pp, version);
-        __srs_key_copy_to(pp, key);
-        __srs_digest_copy_to(pp, digest, with_digest);
+    c1s1_strategy_schema0::~c1s1_strategy_schema0()
+    {
+    }
+    
+    srs_schema_type c1s1_strategy_schema0::schema()
+    {
+        return srs_schema0;
+    }
+    
+    int c1s1_strategy_schema0::parse(char* _c1s1, int size)
+    {
+        int ret = ERROR_SUCCESS;
+        
+        srs_assert(size == 1536);
+        
+        SrsStream stream;
+        
+        if ((ret = stream.initialize(_c1s1 + 8, 764)) != ERROR_SUCCESS) {
+            return ret;
+        }
+        
+        if ((ret = key.parse(&stream)) != ERROR_SUCCESS) {
+            srs_error("parse the c1 key failed. ret=%d", ret);
+            return ret;
+        }
+        
+        if ((ret = stream.initialize(_c1s1 + 8 + 764, 764)) != ERROR_SUCCESS) {
+            return ret;
+        }
+
+        if ((ret = digest.parse(&stream)) != ERROR_SUCCESS) {
+            srs_error("parse the c1 digest failed. ret=%d", ret);
+            return ret;
+        }
+        
+        srs_verbose("parse c1 key-digest success");
+        
+        return ret;
+    }
+    
+    int c1s1_strategy_schema0::copy_to(c1s1* owner, char* bytes, int size, bool with_digest)
+    {
+        int ret = ERROR_SUCCESS;
         
         if (with_digest) {
-            srs_assert(pp - bytes == 1536);
+            srs_assert(size == 1536);
         } else {
-            srs_assert(pp - bytes == 1536 - 32);
+            srs_assert(size == 1504);
         }
+        
+        SrsStream stream;
+        
+        if ((ret = stream.initialize(bytes, size)) != ERROR_SUCCESS) {
+            return ret;
+        }
+        
+        copy_time_version(&stream, owner);
+        copy_key(&stream);
+        copy_digest(&stream, with_digest);
+        
+        srs_assert(stream.empty());
+        
+        return ret;
     }
-    void srs_schema1_copy_to(char* bytes, bool with_digest, 
-        int32_t time, int32_t version, digest_block* digest, key_block* key)
-    {
-        char* pp = bytes;
     
-        __srs_time_copy_to(pp, time);
-        __srs_version_copy_to(pp, version);
-        __srs_digest_copy_to(pp, digest, with_digest);
-        __srs_key_copy_to(pp, key);
+    c1s1_strategy_schema1::c1s1_strategy_schema1()
+    {
+    }
+    
+    c1s1_strategy_schema1::~c1s1_strategy_schema1()
+    {
+    }
+    
+    srs_schema_type c1s1_strategy_schema1::schema()
+    {
+        return srs_schema1;
+    }
+    
+    int c1s1_strategy_schema1::parse(char* _c1s1, int size)
+    {
+        int ret = ERROR_SUCCESS;
+        
+        srs_assert(size == 1536);
+        
+        SrsStream stream;
+        
+        if ((ret = stream.initialize(_c1s1 + 8, 764)) != ERROR_SUCCESS) {
+            return ret;
+        }
+
+        if ((ret = digest.parse(&stream)) != ERROR_SUCCESS) {
+            srs_error("parse the c1 digest failed. ret=%d", ret);
+            return ret;
+        }
+        
+        if ((ret = stream.initialize(_c1s1 + 8 + 764, 764)) != ERROR_SUCCESS) {
+            return ret;
+        }
+        
+        if ((ret = key.parse(&stream)) != ERROR_SUCCESS) {
+            srs_error("parse the c1 key failed. ret=%d", ret);
+            return ret;
+        }
+        
+        srs_verbose("parse c1 digest-key success");
+        
+        return ret;
+    }
+    
+    int c1s1_strategy_schema1::copy_to(c1s1* owner, char* bytes, int size, bool with_digest)
+    {
+        int ret = ERROR_SUCCESS;
         
         if (with_digest) {
-            srs_assert(pp - bytes == 1536);
+            srs_assert(size == 1536);
         } else {
-            srs_assert(pp - bytes == 1536 - 32);
+            srs_assert(size == 1504);
         }
+        
+        SrsStream stream;
+        
+        if ((ret = stream.initialize(bytes, size)) != ERROR_SUCCESS) {
+            return ret;
+        }
+        
+        copy_time_version(&stream, owner);
+        copy_digest(&stream, with_digest);
+        copy_key(&stream);
+        
+        srs_assert(stream.empty());
+        
+        return ret;
     }
     
-    /**
-    * c1s1 is splited by digest:
-    *     c1s1-part1: n bytes (time, version, key and digest-part1).
-    *     digest-data: 32bytes
-    *     c1s1-part2: (1536-n-32)bytes (digest-part2)
-    */
-    char* srs_bytes_join_schema0(int32_t time, int32_t version, key_block* key, digest_block* digest)
+    c1s1::c1s1()
     {
-        char* bytes = new char[1536 -32];
-        
-        srs_schema0_copy_to(bytes, false, time, version, key, digest);
-        
-        return bytes;
+        payload = NULL;
+    }
+    c1s1::~c1s1()
+    {
+        srs_freep(payload);
     }
     
-    /**
-    * c1s1 is splited by digest:
-    *     c1s1-part1: n bytes (time, version and digest-part1).
-    *     digest-data: 32bytes
-    *     c1s1-part2: (1536-n-32)bytes (digest-part2 and key)
-    */
-    char* srs_bytes_join_schema1(int32_t time, int32_t version, digest_block* digest, key_block* key)
+    srs_schema_type c1s1::schema()
     {
-        char* bytes = new char[1536 -32];
+        srs_assert(payload != NULL);
+        return payload->schema();
+    }
+    
+    char* c1s1::get_digest()
+    {
+        srs_assert(payload != NULL);
+        return payload->get_digest();
+    }
+    
+    char* c1s1::get_key()
+    {
+        srs_assert(payload != NULL);
+        return payload->get_key();
+    }
+    
+    int c1s1::dump(char* _c1s1, int size)
+    {
+        srs_assert(size == 1536);
+        srs_assert(payload != NULL);
+        return payload->dump(this, _c1s1, size);
+    }
+    
+    int c1s1::parse(char* _c1s1, int size, srs_schema_type schema)
+    {
+        int ret = ERROR_SUCCESS;
         
-        srs_schema1_copy_to(bytes, false, time, version, digest, key);
+        srs_assert(size == 1536);
         
-        return bytes;
+        if (schema != srs_schema0 && schema != srs_schema1) {
+            ret = ERROR_RTMP_CH_SCHEMA;
+            srs_error("parse c1 failed. invalid schema=%d, ret=%d", schema, ret);
+            return ret;
+        }
+        
+        SrsStream stream;
+        
+        if ((ret = stream.initialize(_c1s1, size)) != ERROR_SUCCESS) {
+            return ret;
+        }
+        
+        time = stream.read_4bytes();
+        version = stream.read_4bytes(); // client c1 version
+        
+        srs_freep(payload);
+        if (schema == srs_schema0) {
+            payload = new c1s1_strategy_schema0();
+        } else {
+            payload = new c1s1_strategy_schema1();
+        }
+
+        return payload->parse(_c1s1, size);
+    }
+    
+    int c1s1::c1_create(srs_schema_type schema)
+    {
+        int ret = ERROR_SUCCESS;
+        
+        if (schema != srs_schema0 && schema != srs_schema1) {
+            ret = ERROR_RTMP_CH_SCHEMA;
+            srs_error("create c1 failed. invalid schema=%d, ret=%d", schema, ret);
+            return ret;
+        }
+        
+        // client c1 time and version
+        time = ::time(NULL);
+        version = 0x80000702; // client c1 version
+
+        // generate signature by schema
+        srs_freep(payload);
+        if (schema == srs_schema0) {
+            payload = new c1s1_strategy_schema0();
+        } else {
+            payload = new c1s1_strategy_schema1();
+        }
+        
+        return payload->c1_create(this);
+    }
+    
+    int c1s1::c1_validate_digest(bool& is_valid)
+    {
+        is_valid = false;
+        srs_assert(payload);
+        return payload->c1_validate_digest(this, is_valid);
+    }
+    
+    int c1s1::s1_create(c1s1* c1)
+    {
+        int ret = ERROR_SUCCESS;
+        
+        if (c1->schema() != srs_schema0 && c1->schema() != srs_schema1) {
+            ret = ERROR_RTMP_CH_SCHEMA;
+            srs_error("create s1 failed. invalid schema=%d, ret=%d", c1->schema(), ret);
+            return ret;
+        }
+        
+        time = ::time(NULL);
+        version = 0x01000504; // server s1 version
+        
+        srs_freep(payload);
+        if (c1->schema() == srs_schema0) {
+            payload = new c1s1_strategy_schema0();
+        } else {
+            payload = new c1s1_strategy_schema1();
+        }
+        
+        return payload->s1_create(this, c1);
+    }
+    
+    int c1s1::s1_validate_digest(bool& is_valid)
+    {
+        is_valid = false;
+        srs_assert(payload);
+        return payload->s1_validate_digest(this, is_valid);
     }
     
     c2s2::c2s2()
@@ -16457,16 +17013,24 @@ namespace _srs_internal
     {
     }
     
-    void c2s2::dump(char* _c2s2)
+    int c2s2::dump(char* _c2s2, int size)
     {
+        srs_assert(size == 1536);
+        
         memcpy(_c2s2, random, 1504);
         memcpy(_c2s2 + 1504, digest, 32);
+        
+        return ERROR_SUCCESS;
     }
     
-    void c2s2::parse(char* _c2s2)
+    int c2s2::parse(char* _c2s2, int size)
     {
+        srs_assert(size == 1536);
+        
         memcpy(random, _c2s2, 1504);
         memcpy(digest, _c2s2 + 1504, 32);
+        
+        return ERROR_SUCCESS;
     }
     
     int c2s2::c2_create(c1s1* s1)
@@ -16561,319 +17125,6 @@ namespace _srs_internal
         is_valid = srs_bytes_equals(digest, _digest, 32);
         
         return ret;
-    }
-    
-    // TODO: FIXME: move to the right position.
-    c1s1::c1s1()
-    {
-        schema = srs_schema_invalid;
-    }
-    c1s1::~c1s1()
-    {
-        destroy_blocks();
-    }
-    
-    char* c1s1::get_digest()
-    {
-        srs_assert(schema != srs_schema_invalid);
-        
-        if (schema == srs_schema0) {
-            return block1.digest.digest;
-        } else {
-            return block0.digest.digest;
-        }
-    }
-    
-    void c1s1::dump(char* _c1s1)
-    {
-        srs_assert(schema != srs_schema_invalid);
-        
-        if (schema == srs_schema0) {
-            srs_schema0_copy_to(_c1s1, true, time, version, &block0.key, &block1.digest);
-        } else {
-            srs_schema1_copy_to(_c1s1, true, time, version, &block0.digest, &block1.key);
-        }
-    }
-    
-    int c1s1::parse(char* _c1s1, srs_schema_type _schema)
-    {
-        int ret = ERROR_SUCCESS;
-        
-        if (_schema == srs_schema_invalid) {
-            ret = ERROR_RTMP_CH_SCHEMA;
-            srs_error("parse c1 failed. invalid schema=%d, ret=%d", _schema, ret);
-            return ret;
-        }
-        
-        destroy_blocks();
-        
-        
-        time = __srs_stream_read_4bytes(_c1s1);
-        version = __srs_stream_read_4bytes(_c1s1 + 4); // client c1 version
-        
-        if (_schema == srs_schema0) {
-            if ((ret = srs_key_block_parse(&block0.key, _c1s1 + 8)) != ERROR_SUCCESS) {
-                srs_error("parse the c1 key failed. ret=%d", ret);
-                return ret;
-            }
-            if ((ret = srs_digest_block_parse(&block1.digest, _c1s1 + 8 + 764)) != ERROR_SUCCESS) {
-                srs_error("parse the c1 digest failed. ret=%d", ret);
-                return ret;
-            }
-            srs_verbose("parse c1 key-digest success");
-        } else if (_schema == srs_schema1) {
-            if ((ret = srs_digest_block_parse(&block0.digest, _c1s1 + 8)) != ERROR_SUCCESS) {
-                srs_error("parse the c1 key failed. ret=%d", ret);
-                return ret;
-            }
-            if ((ret = srs_key_block_parse(&block1.key, _c1s1 + 8 + 764)) != ERROR_SUCCESS) {
-                srs_error("parse the c1 digest failed. ret=%d", ret);
-                return ret;
-            }
-            srs_verbose("parse c1 digest-key success");
-        } else {
-            ret = ERROR_RTMP_CH_SCHEMA;
-            srs_error("parse c1 failed. invalid schema=%d, ret=%d", _schema, ret);
-            return ret;
-        }
-        
-        schema = _schema;
-        
-        return ret;
-    }
-    
-    int c1s1::c1_create(srs_schema_type _schema)
-    {
-        int ret = ERROR_SUCCESS;
-        
-        if (_schema == srs_schema_invalid) {
-            ret = ERROR_RTMP_CH_SCHEMA;
-            srs_error("create c1 failed. invalid schema=%d, ret=%d", _schema, ret);
-            return ret;
-        }
-        
-        destroy_blocks();
-        
-        // client c1 time and version
-        time = ::time(NULL);
-        version = 0x80000702; // client c1 version
-        
-        // generate signature by schema
-        if (_schema == srs_schema0) {
-            srs_key_block_init(&block0.key);
-            srs_digest_block_init(&block1.digest);
-        } else {
-            srs_digest_block_init(&block0.digest);
-            srs_key_block_init(&block1.key);
-        }
-        
-        schema = _schema;
-        
-        // generate digest
-        char* digest = NULL;
-        
-        if ((ret = calc_c1_digest(digest)) != ERROR_SUCCESS) {
-            srs_error("sign c1 error, failed to calc digest. ret=%d", ret);
-            return ret;
-        }
-        
-        srs_assert(digest != NULL);
-        SrsAutoFree(char, digest);
-        
-        if (schema == srs_schema0) {
-            memcpy(block1.digest.digest, digest, 32);
-        } else {
-            memcpy(block0.digest.digest, digest, 32);
-        }
-        
-        return ret;
-    }
-    
-    int c1s1::c1_validate_digest(bool& is_valid)
-    {
-        is_valid = false;
-        int ret = ERROR_SUCCESS;
-        
-        char* c1_digest = NULL;
-        
-        if ((ret = calc_c1_digest(c1_digest)) != ERROR_SUCCESS) {
-            srs_error("validate c1 error, failed to calc digest. ret=%d", ret);
-            return ret;
-        }
-        
-        srs_assert(c1_digest != NULL);
-        SrsAutoFree(char, c1_digest);
-        
-        if (schema == srs_schema0) {
-            is_valid = srs_bytes_equals(block1.digest.digest, c1_digest, 32);
-        } else {
-            is_valid = srs_bytes_equals(block0.digest.digest, c1_digest, 32);
-        }
-        
-        return ret;
-    }
-    
-    int c1s1::s1_validate_digest(bool& is_valid)
-    {
-        is_valid = false;
-        int ret = ERROR_SUCCESS;
-        
-        char* s1_digest = NULL;
-        
-        if ((ret = calc_s1_digest(s1_digest)) != ERROR_SUCCESS) {
-            srs_error("validate s1 error, failed to calc digest. ret=%d", ret);
-            return ret;
-        }
-        
-        srs_assert(s1_digest != NULL);
-        SrsAutoFree(char, s1_digest);
-        
-        if (schema == srs_schema0) {
-            is_valid = srs_bytes_equals(block1.digest.digest, s1_digest, 32);
-        } else {
-            is_valid = srs_bytes_equals(block0.digest.digest, s1_digest, 32);
-        }
-        
-        return ret;
-    }
-    
-    int c1s1::s1_create(c1s1* c1)
-    {
-        int ret = ERROR_SUCCESS;
-        
-        if (c1->schema == srs_schema_invalid) {
-            ret = ERROR_RTMP_CH_SCHEMA;
-            srs_error("create s1 failed. invalid schema=%d, ret=%d", c1->schema, ret);
-            return ret;
-        }
-        
-        destroy_blocks();
-        schema = c1->schema;
-        
-        time = ::time(NULL);
-        version = 0x01000504; // server s1 version
-        
-        SrsDH dh;
-        
-        // ensure generate 128bytes public key.
-        if ((ret = dh.initialize(true)) != ERROR_SUCCESS) {
-            return ret;
-        }
-        
-        if (schema == srs_schema0) {
-            srs_key_block_init(&block0.key);
-            srs_digest_block_init(&block1.digest);
-            
-            // directly generate the public key.
-            // @see: https://github.com/winlinvip/simple-rtmp-server/issues/148
-            int pkey_size = 128;
-            if ((ret = dh.copy_public_key(block0.key.key, pkey_size)) != ERROR_SUCCESS) {
-                srs_error("calc s1 key failed. ret=%d", ret);
-                return ret;
-            }
-            srs_assert(pkey_size == 128);
-        } else {
-            srs_digest_block_init(&block0.digest);
-            srs_key_block_init(&block1.key);
-            
-            // directly generate the public key.
-            // @see: https://github.com/winlinvip/simple-rtmp-server/issues/148
-            int pkey_size = 128;
-            if ((ret = dh.copy_public_key(block1.key.key, pkey_size)) != ERROR_SUCCESS) {
-                srs_error("calc s1 key failed. ret=%d", ret);
-                return ret;
-            }
-            srs_assert(pkey_size == 128);
-        }
-        srs_verbose("calc s1 key success.");
-            
-        char* s1_digest = NULL;
-        if ((ret = calc_s1_digest(s1_digest))  != ERROR_SUCCESS) {
-            srs_error("calc s1 digest failed. ret=%d", ret);
-            return ret;
-        }
-        srs_verbose("calc s1 digest success.");
-        
-        srs_assert(s1_digest != NULL);
-        SrsAutoFree(char, s1_digest);
-        
-        if (schema == srs_schema0) {
-            memcpy(block1.digest.digest, s1_digest, 32);
-        } else {
-            memcpy(block0.digest.digest, s1_digest, 32);
-        }
-        srs_verbose("copy s1 key success.");
-        
-        return ret;
-    }
-    
-    int c1s1::calc_s1_digest(char*& digest)
-    {
-        int ret = ERROR_SUCCESS;
-        
-        srs_assert(schema == srs_schema0 || schema == srs_schema1);
-        
-        char* c1s1_joined_bytes = NULL;
-    
-        if (schema == srs_schema0) {
-            c1s1_joined_bytes = srs_bytes_join_schema0(time, version, &block0.key, &block1.digest);
-        } else {
-            c1s1_joined_bytes = srs_bytes_join_schema1(time, version, &block0.digest, &block1.key);
-        }
-        
-        srs_assert(c1s1_joined_bytes != NULL);
-        SrsAutoFree(char, c1s1_joined_bytes);
-        
-        digest = new char[__SRS_OpensslHashSize];
-        if ((ret = openssl_HMACsha256(SrsGenuineFMSKey, 36, c1s1_joined_bytes, 1536 - 32, digest)) != ERROR_SUCCESS) {
-            srs_error("calc digest for s1 failed. ret=%d", ret);
-            return ret;
-        }
-        srs_verbose("digest calculated for s1");
-        
-        return ret;
-    }
-    
-    int c1s1::calc_c1_digest(char*& digest)
-    {
-        int ret = ERROR_SUCCESS;
-        
-        srs_assert(schema == srs_schema0 || schema == srs_schema1);
-        
-        char* c1s1_joined_bytes = NULL;
-    
-        if (schema == srs_schema0) {
-            c1s1_joined_bytes = srs_bytes_join_schema0(time, version, &block0.key, &block1.digest);
-        } else {
-            c1s1_joined_bytes = srs_bytes_join_schema1(time, version, &block0.digest, &block1.key);
-        }
-        
-        srs_assert(c1s1_joined_bytes != NULL);
-        SrsAutoFree(char, c1s1_joined_bytes);
-        
-        digest = new char[__SRS_OpensslHashSize];
-        if ((ret = openssl_HMACsha256(SrsGenuineFPKey, 30, c1s1_joined_bytes, 1536 - 32, digest)) != ERROR_SUCCESS) {
-            srs_error("calc digest for c1 failed. ret=%d", ret);
-            return ret;
-        }
-        srs_verbose("digest calculated for c1");
-        
-        return ret;
-    }
-    
-    void c1s1::destroy_blocks()
-    {
-        if (schema == srs_schema_invalid) {
-            return;
-        }
-        
-        if (schema == srs_schema0) {
-            srs_key_block_free(&block0.key);
-            srs_digest_block_free(&block1.digest);
-        } else {
-            srs_digest_block_free(&block0.digest);
-            srs_key_block_free(&block1.key);
-        }
     }
 }
 
@@ -16994,14 +17245,16 @@ int SrsComplexHandshake::handshake_with_client(SrsHandshakeBytes* hs_bytes, ISrs
     // decode c1
     c1s1 c1;
     // try schema0.
-    if ((ret = c1.parse(hs_bytes->c0c1 + 1, srs_schema0)) != ERROR_SUCCESS) {
+    // @remark, use schema0 to make flash player happy.
+    if ((ret = c1.parse(hs_bytes->c0c1 + 1, 1536, srs_schema0)) != ERROR_SUCCESS) {
         srs_error("parse c1 schema%d error. ret=%d", srs_schema0, ret);
         return ret;
     }
     // try schema1
     bool is_valid = false;
     if ((ret = c1.c1_validate_digest(is_valid)) != ERROR_SUCCESS || !is_valid) {
-        if ((ret = c1.parse(hs_bytes->c0c1 + 1, srs_schema1)) != ERROR_SUCCESS) {
+        srs_info("schema0 failed, try schema1.");
+        if ((ret = c1.parse(hs_bytes->c0c1 + 1, 1536, srs_schema1)) != ERROR_SUCCESS) {
             srs_error("parse c1 schema%d error. ret=%d", srs_schema1, ret);
             return ret;
         }
@@ -17011,6 +17264,8 @@ int SrsComplexHandshake::handshake_with_client(SrsHandshakeBytes* hs_bytes, ISrs
             srs_info("all schema valid failed, try simple handshake. ret=%d", ret);
             return ret;
         }
+    } else {
+        srs_info("schema0 is ok.");
     }
     srs_verbose("decode c1 success.");
     
@@ -17047,8 +17302,12 @@ int SrsComplexHandshake::handshake_with_client(SrsHandshakeBytes* hs_bytes, ISrs
     if ((ret = hs_bytes->create_s0s1s2()) != ERROR_SUCCESS) {
         return ret;
     }
-    s1.dump(hs_bytes->s0s1s2 + 1);
-    s2.dump(hs_bytes->s0s1s2 + 1537);
+    if ((ret = s1.dump(hs_bytes->s0s1s2 + 1, 1536)) != ERROR_SUCCESS) {
+        return ret;
+    }
+    if ((ret = s2.dump(hs_bytes->s0s1s2 + 1537, 1536)) != ERROR_SUCCESS) {
+        return ret;
+    }
     if ((ret = io->write(hs_bytes->s0s1s2, 3073, &nsize)) != ERROR_SUCCESS) {
         srs_warn("complex handshake send s0s1s2 failed. ret=%d", ret);
         return ret;
@@ -17060,7 +17319,9 @@ int SrsComplexHandshake::handshake_with_client(SrsHandshakeBytes* hs_bytes, ISrs
         return ret;
     }
     c2s2 c2;
-    c2.parse(hs_bytes->c2);
+    if ((ret = c2.parse(hs_bytes->c2, 1536)) != ERROR_SUCCESS) {
+        return ret;
+    }
     srs_verbose("complex handshake read c2 success.");
     
     // verify c2
@@ -17096,7 +17357,9 @@ int SrsComplexHandshake::handshake_with_server(SrsHandshakeBytes* hs_bytes, ISrs
     if ((ret = c1.c1_create(srs_schema1)) != ERROR_SUCCESS) {
         return ret;
     }
-    c1.dump(hs_bytes->c0c1 + 1);
+    if ((ret = c1.dump(hs_bytes->c0c1 + 1, 1536)) != ERROR_SUCCESS) {
+        return ret;
+    }
 
     // verify c1
     bool is_valid;
@@ -17125,7 +17388,7 @@ int SrsComplexHandshake::handshake_with_server(SrsHandshakeBytes* hs_bytes, ISrs
     
     // verify s1s2
     c1s1 s1;
-    if ((ret = s1.parse(hs_bytes->s0s1s2 + 1, c1.schema)) != ERROR_SUCCESS) {
+    if ((ret = s1.parse(hs_bytes->s0s1s2 + 1, 1536, c1.schema())) != ERROR_SUCCESS) {
         return ret;
     }
     
@@ -17143,7 +17406,9 @@ int SrsComplexHandshake::handshake_with_server(SrsHandshakeBytes* hs_bytes, ISrs
         return ret;
     }
 
-    c2.dump(hs_bytes->c2);
+    if ((ret = c2.dump(hs_bytes->c2, 1536)) != ERROR_SUCCESS) {
+        return ret;
+    }
     if ((ret = io->write(hs_bytes->c2, 1536, &nsize)) != ERROR_SUCCESS) {
         srs_warn("complex handshake write c2 failed. ret=%d", ret);
         return ret;
@@ -17465,7 +17730,7 @@ using namespace std;
 //#include <srs_lib_bandwidth.hpp>
 
 // if want to use your log, define the folowing macro.
-#ifndef SRS_RTMP_USER_DEFINED_LOG
+#ifndef SRS_HIJACK_LOG
     // kernel module.
     ISrsLog* _srs_log = new ISrsLog();
     ISrsThreadContext* _srs_context = new ISrsThreadContext();
@@ -19898,188 +20163,305 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     #define ST_UTIME_NO_TIMEOUT -1
 #endif
 
+// when io not hijacked, use simple socket, the block sync stream.
+#ifndef SRS_HIJACK_IO
+    struct SrsBlockSyncSocket
+    {
+        SOCKET fd;
+        int64_t recv_timeout;
+        int64_t send_timeout;
+        int64_t recv_bytes;
+        int64_t send_bytes;
+        
+        SrsBlockSyncSocket() {
+            send_timeout = recv_timeout = ST_UTIME_NO_TIMEOUT;
+            recv_bytes = send_bytes = 0;
+            
+            SOCKET_RESET(fd);
+            SOCKET_SETUP();
+        }
+        
+        virtual ~SrsBlockSyncSocket() {
+            SOCKET_CLOSE(fd);
+            SOCKET_CLEANUP();
+        }
+    };
+    srs_hijack_io_t srs_hijack_io_create()
+    {
+        SrsBlockSyncSocket* skt = new SrsBlockSyncSocket();
+        return skt;
+    }
+    void srs_hijack_io_destroy(srs_hijack_io_t ctx)
+    {
+        SrsBlockSyncSocket* skt = (SrsBlockSyncSocket*)ctx;
+        srs_freep(skt);
+    }
+    int srs_hijack_io_create_socket(srs_hijack_io_t ctx)
+    {
+        SrsBlockSyncSocket* skt = (SrsBlockSyncSocket*)ctx;
+        
+        skt->fd = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (!SOCKET_VALID(skt->fd)) {
+            return ERROR_SOCKET_CREATE;
+        }
+    
+        return ERROR_SUCCESS;
+    }
+    int srs_hijack_io_connect(srs_hijack_io_t ctx, const char* server_ip, int port)
+    {
+        SrsBlockSyncSocket* skt = (SrsBlockSyncSocket*)ctx;
+        
+        sockaddr_in addr;
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(port);
+        addr.sin_addr.s_addr = inet_addr(server_ip);
+        
+        if(::connect(skt->fd, (const struct sockaddr*)&addr, sizeof(sockaddr_in)) < 0){
+            return ERROR_SOCKET_CONNECT;
+        }
+        
+        return ERROR_SUCCESS;
+    }
+    int srs_hijack_io_read(srs_hijack_io_t ctx, void* buf, size_t size, ssize_t* nread)
+    {
+        SrsBlockSyncSocket* skt = (SrsBlockSyncSocket*)ctx;
+        
+        int ret = ERROR_SUCCESS;
+        
+        ssize_t nb_read = ::recv(skt->fd, (char*)buf, size, 0);
+        
+        if (nread) {
+            *nread = nb_read;
+        }
+        
+        // On success a non-negative integer indicating the number of bytes actually read is returned 
+        // (a value of 0 means the network connection is closed or end of file is reached).
+        if (nb_read <= 0) {
+            if (nb_read < 0 && SOCKET_ERRNO() == SOCKET_ETIME) {
+                return ERROR_SOCKET_TIMEOUT;
+            }
+            
+            if (nb_read == 0) {
+                errno = SOCKET_ECONNRESET;
+            }
+            
+            return ERROR_SOCKET_READ;
+        }
+        
+        skt->recv_bytes += nb_read;
+        
+        return ret;
+    }
+    void srs_hijack_io_set_recv_timeout(srs_hijack_io_t ctx, int64_t timeout_us)
+    {
+        SrsBlockSyncSocket* skt = (SrsBlockSyncSocket*)ctx;
+        skt->recv_timeout = timeout_us;
+    }
+    int64_t srs_hijack_io_get_recv_timeout(srs_hijack_io_t ctx)
+    {
+        SrsBlockSyncSocket* skt = (SrsBlockSyncSocket*)ctx;
+        return skt->recv_timeout;
+    }
+    int64_t srs_hijack_io_get_recv_bytes(srs_hijack_io_t ctx)
+    {
+        SrsBlockSyncSocket* skt = (SrsBlockSyncSocket*)ctx;
+        return skt->recv_bytes;
+    }
+    void srs_hijack_io_set_send_timeout(srs_hijack_io_t ctx, int64_t timeout_us)
+    {
+        SrsBlockSyncSocket* skt = (SrsBlockSyncSocket*)ctx;
+        skt->send_timeout = timeout_us;
+    }
+    int64_t srs_hijack_io_get_send_timeout(srs_hijack_io_t ctx)
+    {
+        SrsBlockSyncSocket* skt = (SrsBlockSyncSocket*)ctx;
+        return skt->send_timeout;
+    }
+    int64_t srs_hijack_io_get_send_bytes(srs_hijack_io_t ctx)
+    {
+        SrsBlockSyncSocket* skt = (SrsBlockSyncSocket*)ctx;
+        return skt->send_bytes;
+    }
+    int srs_hijack_io_writev(srs_hijack_io_t ctx, const iovec *iov, int iov_size, ssize_t* nwrite)
+    {
+        SrsBlockSyncSocket* skt = (SrsBlockSyncSocket*)ctx;
+        
+        int ret = ERROR_SUCCESS;
+        
+        ssize_t nb_write = ::writev(skt->fd, iov, iov_size);
+        
+        if (nwrite) {
+            *nwrite = nb_write;
+        }
+        
+        // On  success,  the  readv()  function  returns the number of bytes read; 
+        // the writev() function returns the number of bytes written.  On error, -1 is
+        // returned, and errno is set appropriately.
+        if (nb_write <= 0) {
+            // @see https://github.com/winlinvip/simple-rtmp-server/issues/200
+            if (nb_write < 0 && SOCKET_ERRNO() == SOCKET_ETIME) {
+                return ERROR_SOCKET_TIMEOUT;
+            }
+            
+            return ERROR_SOCKET_WRITE;
+        }
+        
+        skt->send_bytes += nb_write;
+        
+        return ret;
+    }
+    bool srs_hijack_io_is_never_timeout(srs_hijack_io_t ctx, int64_t timeout_us)
+    {
+        return timeout_us == (int64_t)ST_UTIME_NO_TIMEOUT;
+    }
+    int srs_hijack_io_read_fully(srs_hijack_io_t ctx, void* buf, size_t size, ssize_t* nread)
+    {
+        SrsBlockSyncSocket* skt = (SrsBlockSyncSocket*)ctx;
+        
+        int ret = ERROR_SUCCESS;
+        
+        size_t left = size;
+        ssize_t nb_read = 0;
+        
+        while (left > 0) {
+            char* this_buf = (char*)buf + nb_read;
+            ssize_t this_nread;
+            
+            if ((ret = srs_hijack_io_read(ctx, this_buf, left, &this_nread)) != ERROR_SUCCESS) {
+                return ret;
+            }
+            
+            nb_read += this_nread;
+            left -= (size_t)this_nread;
+        }
+        
+        if (nread) {
+            *nread = nb_read;
+        }
+        skt->recv_bytes += nb_read;
+        
+        return ret;
+    }
+    int srs_hijack_io_write(srs_hijack_io_t ctx, void* buf, size_t size, ssize_t* nwrite)
+    {
+        SrsBlockSyncSocket* skt = (SrsBlockSyncSocket*)ctx;
+        
+        int ret = ERROR_SUCCESS;
+        
+        ssize_t nb_write = ::send(skt->fd, (char*)buf, size, 0);
+        
+        if (nwrite) {
+            *nwrite = nb_write;
+        }
+        
+        if (nb_write <= 0) {
+            // @see https://github.com/winlinvip/simple-rtmp-server/issues/200
+            if (nb_write < 0 && SOCKET_ERRNO() == SOCKET_ETIME) {
+                return ERROR_SOCKET_TIMEOUT;
+            }
+            
+            return ERROR_SOCKET_WRITE;
+        }
+        
+        skt->send_bytes += nb_write;
+        
+        return ret;
+    }
+#endif
+
 SimpleSocketStream::SimpleSocketStream()
 {
-    SOCKET_RESET(fd);
-    send_timeout = recv_timeout = ST_UTIME_NO_TIMEOUT;
-    recv_bytes = send_bytes = 0;
-    SOCKET_SETUP();
+    io = srs_hijack_io_create();
 }
 
 SimpleSocketStream::~SimpleSocketStream()
 {
-    SOCKET_CLOSE(fd);
-    SOCKET_CLEANUP();
+    if (io) {
+        srs_hijack_io_destroy(io);
+        io = NULL;
+    }
 }
 
 int SimpleSocketStream::create_socket()
 {
-    fd = ::socket(AF_INET, SOCK_STREAM, 0);
-    if (!SOCKET_VALID(fd)) {
-        return ERROR_SOCKET_CREATE;
-    }
-
-    return ERROR_SUCCESS;
+    srs_assert(io);
+    return srs_hijack_io_create_socket(io);
 }
 
 int SimpleSocketStream::connect(const char* server_ip, int port)
 {
-    sockaddr_in addr;
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = inet_addr(server_ip);
-    
-    if(::connect(fd, (const struct sockaddr*)&addr, sizeof(sockaddr_in)) < 0){
-        return ERROR_SOCKET_CONNECT;
-    }
-
-    return ERROR_SUCCESS;
+    srs_assert(io);
+    return srs_hijack_io_connect(io, server_ip, port);
 }
 
 // ISrsBufferReader
 int SimpleSocketStream::read(void* buf, size_t size, ssize_t* nread)
 {
-    int ret = ERROR_SUCCESS;
-    
-    ssize_t nb_read = ::recv(fd, (char*)buf, size, 0);
-    
-    if (nread) {
-        *nread = nb_read;
-    }
-    
-    // On success a non-negative integer indicating the number of bytes actually read is returned 
-    // (a value of 0 means the network connection is closed or end of file is reached).
-    if (nb_read <= 0) {
-        if (nb_read < 0 && SOCKET_ERRNO() == SOCKET_ETIME) {
-            return ERROR_SOCKET_TIMEOUT;
-        }
-        
-        if (nb_read == 0) {
-            errno = SOCKET_ECONNRESET;
-        }
-        
-        return ERROR_SOCKET_READ;
-    }
-    
-    recv_bytes += nb_read;
-    
-    return ret;
+    srs_assert(io);
+    return srs_hijack_io_read(io, buf, size, nread);
 }
 
 // ISrsProtocolReader
 void SimpleSocketStream::set_recv_timeout(int64_t timeout_us)
 {
-    recv_timeout = timeout_us;
+    srs_assert(io);
+    srs_hijack_io_set_recv_timeout(io, timeout_us);
 }
 
 int64_t SimpleSocketStream::get_recv_timeout()
 {
-    return recv_timeout;
+    srs_assert(io);
+    return srs_hijack_io_get_recv_timeout(io);
 }
 
 int64_t SimpleSocketStream::get_recv_bytes()
 {
-    return recv_bytes;
+    srs_assert(io);
+    return srs_hijack_io_get_recv_bytes(io);
 }
 
 // ISrsProtocolWriter
 void SimpleSocketStream::set_send_timeout(int64_t timeout_us)
 {
-    send_timeout = timeout_us;
+    srs_assert(io);
+    srs_hijack_io_set_send_timeout(io, timeout_us);
 }
 
 int64_t SimpleSocketStream::get_send_timeout()
 {
-    return send_timeout;
+    srs_assert(io);
+    return srs_hijack_io_get_send_timeout(io);
 }
 
 int64_t SimpleSocketStream::get_send_bytes()
 {
-    return send_bytes;
+    srs_assert(io);
+    return srs_hijack_io_get_send_bytes(io);
 }
 
 int SimpleSocketStream::writev(const iovec *iov, int iov_size, ssize_t* nwrite)
 {
-    int ret = ERROR_SUCCESS;
-    
-    ssize_t nb_write = ::writev(fd, iov, iov_size);
-    
-    if (nwrite) {
-        *nwrite = nb_write;
-    }
-    
-    // On  success,  the  readv()  function  returns the number of bytes read; 
-    // the writev() function returns the number of bytes written.  On error, -1 is
-    // returned, and errno is set appropriately.
-    if (nb_write <= 0) {
-        // @see https://github.com/winlinvip/simple-rtmp-server/issues/200
-        if (nb_write < 0 && SOCKET_ERRNO() == SOCKET_ETIME) {
-            return ERROR_SOCKET_TIMEOUT;
-        }
-        
-        return ERROR_SOCKET_WRITE;
-    }
-    
-    send_bytes += nb_write;
-    
-    return ret;
+    srs_assert(io);
+    return srs_hijack_io_writev(io, iov, iov_size, nwrite);
 }
 
 // ISrsProtocolReaderWriter
 bool SimpleSocketStream::is_never_timeout(int64_t timeout_us)
 {
-    return timeout_us == (int64_t)ST_UTIME_NO_TIMEOUT;
+    srs_assert(io);
+    return srs_hijack_io_is_never_timeout(io, timeout_us);
 }
 
 int SimpleSocketStream::read_fully(void* buf, size_t size, ssize_t* nread)
 {
-    int ret = ERROR_SUCCESS;
-    
-    size_t left = size;
-    ssize_t nb_read = 0;
-    
-    while (left > 0) {
-        char* this_buf = (char*)buf + nb_read;
-        ssize_t this_nread;
-        
-        if ((ret = this->read(this_buf, left, &this_nread)) != ERROR_SUCCESS) {
-            return ret;
-        }
-        
-        nb_read += this_nread;
-        left -= (size_t)this_nread;
-    }
-    
-    if (nread) {
-        *nread = nb_read;
-    }
-    recv_bytes += nb_read;
-    
-    return ret;
+    srs_assert(io);
+    return srs_hijack_io_read_fully(io, buf, size, nread);
 }
 
 int SimpleSocketStream::write(void* buf, size_t size, ssize_t* nwrite)
 {
-    int ret = ERROR_SUCCESS;
-    
-    ssize_t nb_write = ::send(fd, (char*)buf, size, 0);
-    
-    if (nwrite) {
-        *nwrite = nb_write;
-    }
-    
-    if (nb_write <= 0) {
-        // @see https://github.com/winlinvip/simple-rtmp-server/issues/200
-        if (nb_write < 0 && SOCKET_ERRNO() == SOCKET_ETIME) {
-            return ERROR_SOCKET_TIMEOUT;
-        }
-        
-        return ERROR_SOCKET_WRITE;
-    }
-    
-    send_bytes += nb_write;
-    
-    return ret;
+    srs_assert(io);
+    return srs_hijack_io_write(io, buf, size, nwrite);
 }
 
 

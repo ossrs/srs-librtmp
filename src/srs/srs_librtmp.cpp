@@ -27,8 +27,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef SRS_AUTO_HEADER_HPP
 #define SRS_AUTO_HEADER_HPP
 
-#define SRS_AUTO_BUILD_TS "1417494098"
-#define SRS_AUTO_BUILD_DATE "2014-12-02 12:21:38"
+#define SRS_AUTO_BUILD_TS "1417498906"
+#define SRS_AUTO_BUILD_DATE "2014-12-02 13:41:46"
 #define SRS_AUTO_UNAME "Linux dev6 2.6.32-71.el6.x86_64 #1 SMP Fri May 20 03:51:51 BST 2011 x86_64 x86_64 x86_64 GNU/Linux"
 #define SRS_AUTO_USER_CONFIGURE "--x86-x64  --export-librtmp-single=/home/winlin/srs.librtmp/src/srs/"
 #define SRS_AUTO_CONFIGURE "--prefix=/usr/local/srs --without-hls --without-dvr --without-nginx --without-ssl --without-ffmpeg --without-transcode --without-ingest --without-stat --without-http-callback --without-http-server --without-http-api --with-librtmp --with-research --without-utest --without-gperf --without-gmc --without-gmp --without-gcp --without-gprof --without-arm-ubuntu12 --without-mips-ubuntu12 --log-trace"
@@ -113,7 +113,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 // current release version
 #define VERSION_MAJOR       2
 #define VERSION_MINOR       0
-#define VERSION_REVISION    42
+#define VERSION_REVISION    43
 // server info.
 #define RTMP_SIG_SRS_KEY "SRS"
 #define RTMP_SIG_SRS_ROLE "origin/edge server"
@@ -5664,27 +5664,24 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //#include <srs_librtmp.h>
 */
 
-#include <sys/types.h>
+/**
+* srs-librtmp is a librtmp like library,
+* used to play/publish rtmp stream from/to rtmp server.
+* socket: use sync and block socket to connect/recv/send data with server.
+* depends: no need other libraries; depends on ssl if use srs_complex_handshake.
+* thread-safe: no
+*/
 
+/*************************************************************
+**************************************************************
+* Windows SRS-LIBRTMP pre-declare
+**************************************************************
+*************************************************************/
 // for srs-librtmp, @see https://github.com/winlinvip/simple-rtmp-server/issues/213
-#ifndef _WIN32
-    #define SOCKET_ETIME ETIME
-    #define SOCKET_ECONNRESET ECONNRESET
-
-    #define SOCKET int
-    #define SOCKET_ERRNO() errno
-    #define SOCKET_RESET(fd) fd = -1; (void)0
-    #define SOCKET_CLOSE(fd) \
-        if (fd > 0) {\
-            ::close(fd); \
-            fd = -1; \
-        } \
-        (void)0
-    #define SOCKET_VALID(x) (x > 0)
-    #define SOCKET_SETUP() (void)0
-    #define SOCKET_CLEANUP() (void)0
-#else
-    #define _CRT_SECURE_NO_WARNINGS
+#ifdef _WIN32
+    // include windows first.
+    #include <windows.h>
+    // the type used by this header for windows.
     typedef unsigned long long u_int64_t;
     typedef long long int64_t;
     typedef unsigned int u_int32_t;
@@ -5698,55 +5695,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
         void  *iov_base;    /* Starting address */
         size_t iov_len;     /* Number of bytes to transfer */
     };
-    #include <time.h>
-    #include <windows.h>
-    int gettimeofday(struct timeval* tv, struct timezone* tz);
-    #define PRId64 "lld"
-
-    #define SOCKET_ETIME WSAETIMEDOUT
-    #define SOCKET_ECONNRESET WSAECONNRESET
-    #define SOCKET_ERRNO() WSAGetLastError()
-    #define SOCKET_RESET(x) x=INVALID_SOCKET
-    #define SOCKET_CLOSE(x) if(x!=INVALID_SOCKET){::closesocket(x);x=INVALID_SOCKET;}
-    #define SOCKET_VALID(x) (x!=INVALID_SOCKET)
-    #define SOCKET_BUFF(x) ((char*)x)
-    #define SOCKET_SETUP() socket_setup()
-    #define SOCKET_CLEANUP() socket_cleanup()
-    
-    typedef int socklen_t;
-    const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
-    typedef int mode_t;
-    #define S_IRUSR 0
-    #define S_IWUSR 0
-    #define S_IRGRP 0
-    #define S_IWGRP 0
-    #define S_IROTH 0
-    
-    #include <io.h>
-    #include <fcntl.h>
-    #define open _open
-    #define close _close
-    #define lseek _lseek
-    #define write _write
-    #define read _read
-    
-    typedef int pid_t;
-    pid_t getpid(void);
-    #define snprintf _snprintf
-    ssize_t writev(int fd, const struct iovec *iov, int iovcnt);
-    typedef int64_t useconds_t;
-    int usleep(useconds_t usec);
-    int socket_setup();
-    int socket_cleanup();
 #endif
 
-/**
-* srs-librtmp is a librtmp like library,
-* used to play/publish rtmp stream from/to rtmp server.
-* socket: use sync and block socket to connect/recv/send data with server.
-* depends: no need other libraries; depends on ssl if use srs_complex_handshake.
-* thread-safe: no
-*/
+#include <sys/types.h>
 
 #ifdef __cplusplus
 extern "C"{
@@ -6244,7 +6195,6 @@ extern srs_amf0_t srs_amf0_create_ecma_array();
 extern srs_amf0_t srs_amf0_create_strict_array();
 extern srs_amf0_t srs_amf0_create_object();
 extern void srs_amf0_free(srs_amf0_t amf0);
-extern void srs_amf0_free_bytes(char* data);
 /* size and to bytes */
 extern int srs_amf0_size(srs_amf0_t amf0);
 extern int srs_amf0_serialize(srs_amf0_t amf0, char* data, int size);
@@ -6562,9 +6512,17 @@ extern int srs_human_print_rtmp_packet(char type, u_int32_t timestamp, char* dat
 
 // log to console, for use srs-librtmp application.
 extern const char* srs_human_format_time();
-#define srs_human_trace(msg, ...) printf("[%s] ", srs_human_format_time());printf(msg, ##__VA_ARGS__);printf("\n")
-#define srs_human_verbose(msg, ...) printf("[%s] ", srs_human_format_time());printf(msg, ##__VA_ARGS__);printf("\n")
-#define srs_human_raw(msg, ...) printf(msg, ##__VA_ARGS__)
+
+// when disabled log, donot compile it.
+#ifdef SRS_DISABLE_LOG
+    #define srs_human_trace(msg, ...) (void)0
+    #define srs_human_verbose(msg, ...) (void)0
+    #define srs_human_raw(msg, ...) (void)0
+#else
+    #define srs_human_trace(msg, ...) printf("[%s] ", srs_human_format_time());printf(msg, ##__VA_ARGS__);printf("\n")
+    #define srs_human_verbose(msg, ...) printf("[%s] ", srs_human_format_time());printf(msg, ##__VA_ARGS__);printf("\n")
+    #define srs_human_raw(msg, ...) printf(msg, ##__VA_ARGS__)
+#endif
 
 /*************************************************************
 **************************************************************
@@ -6577,6 +6535,10 @@ typedef void* srs_hijack_io_t;
 // the example @see https://github.com/winlinvip/st-load
 // which use librtmp but use its own io(use st also).
 #ifdef SRS_HIJACK_IO
+    #ifndef _WIN32
+        // for iovec.
+        #include <sys/uio.h>
+    #endif
     /**
     * create hijack.
     * @return NULL for error; otherwise, ok.
@@ -6653,6 +6615,45 @@ typedef void* srs_hijack_io_t;
     extern int srs_hijack_io_write(srs_hijack_io_t ctx, void* buf, size_t size, ssize_t* nwrite);
 #endif
 
+/*************************************************************
+**************************************************************
+* Windows SRS-LIBRTMP solution
+**************************************************************
+*************************************************************/
+// for srs-librtmp, @see https://github.com/winlinvip/simple-rtmp-server/issues/213
+#ifdef _WIN32
+    #define _CRT_SECURE_NO_WARNINGS
+    #include <time.h>
+    int gettimeofday(struct timeval* tv, struct timezone* tz);
+    #define PRId64 "lld"
+    
+    typedef int socklen_t;
+    const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
+    typedef int mode_t;
+    #define S_IRUSR 0
+    #define S_IWUSR 0
+    #define S_IRGRP 0
+    #define S_IWGRP 0
+    #define S_IROTH 0
+    
+    #include <io.h>
+    #include <fcntl.h>
+    #define open _open
+    #define close _close
+    #define lseek _lseek
+    #define write _write
+    #define read _read
+    
+    typedef int pid_t;
+    pid_t getpid(void);
+    #define snprintf _snprintf
+    ssize_t writev(int fd, const struct iovec *iov, int iovcnt);
+    typedef int64_t useconds_t;
+    int usleep(useconds_t usec);
+    int socket_setup();
+    int socket_cleanup();
+#endif
+
 #ifdef __cplusplus
 }
 #endif
@@ -6694,6 +6695,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 //#include <srs_protocol_io.hpp>
 //#include <srs_librtmp.hpp>
+
+// for srs-librtmp, @see https://github.com/winlinvip/simple-rtmp-server/issues/213
+#ifndef _WIN32
+    #define SOCKET int
+#endif
 
 /**
 * simple socket stream,
@@ -17729,12 +17735,9 @@ using namespace std;
 //#include <srs_kernel_file.hpp>
 //#include <srs_lib_bandwidth.hpp>
 
-// if want to use your log, define the folowing macro.
-#ifndef SRS_HIJACK_LOG
-    // kernel module.
-    ISrsLog* _srs_log = new ISrsLog();
-    ISrsThreadContext* _srs_context = new ISrsThreadContext();
-#endif
+// kernel module.
+ISrsLog* _srs_log = new ISrsLog();
+ISrsThreadContext* _srs_context = new ISrsThreadContext();
 
 /**
 * export runtime context.
@@ -19427,11 +19430,6 @@ void srs_amf0_free(srs_amf0_t amf0)
     srs_freep(any);
 }
 
-void srs_amf0_free_bytes(char* data)
-{
-    srs_freep(data);
-}
-
 int srs_amf0_size(srs_amf0_t amf0)
 {
     SrsAmf0Any* any = (SrsAmf0Any*)amf0;
@@ -20073,7 +20071,7 @@ int srs_human_print_rtmp_packet(char type, u_int32_t timestamp, char* data, int 
             
             char* amf0_str = NULL;
             srs_human_raw("%s", srs_human_amf0_print(amf0, &amf0_str, NULL));
-            srs_amf0_free_bytes(amf0_str);
+            srs_freep(amf0_str);
         }
     } else {
         srs_human_trace("Unknown packet type=%s, dts=%d, pts=%d, size=%d", 
@@ -20147,11 +20145,39 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 // for srs-librtmp, @see https://github.com/winlinvip/simple-rtmp-server/issues/213
 #ifndef _WIN32
-#include <unistd.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/uio.h>
+    #define SOCKET_ETIME ETIME
+    #define SOCKET_ECONNRESET ECONNRESET
+
+    #define SOCKET_ERRNO() errno
+    #define SOCKET_RESET(fd) fd = -1; (void)0
+    #define SOCKET_CLOSE(fd) \
+        if (fd > 0) {\
+            ::close(fd); \
+            fd = -1; \
+        } \
+        (void)0
+    #define SOCKET_VALID(x) (x > 0)
+    #define SOCKET_SETUP() (void)0
+    #define SOCKET_CLEANUP() (void)0
+#else
+    #define SOCKET_ETIME WSAETIMEDOUT
+    #define SOCKET_ECONNRESET WSAECONNRESET
+    #define SOCKET_ERRNO() WSAGetLastError()
+    #define SOCKET_RESET(x) x=INVALID_SOCKET
+    #define SOCKET_CLOSE(x) if(x!=INVALID_SOCKET){::closesocket(x);x=INVALID_SOCKET;}
+    #define SOCKET_VALID(x) (x!=INVALID_SOCKET)
+    #define SOCKET_BUFF(x) ((char*)x)
+    #define SOCKET_SETUP() socket_setup()
+    #define SOCKET_CLEANUP() socket_cleanup()
+#endif
+
+// for srs-librtmp, @see https://github.com/winlinvip/simple-rtmp-server/issues/213
+#ifndef _WIN32
+    #include <unistd.h>
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <sys/uio.h>
 #endif
 
 #include <sys/types.h>

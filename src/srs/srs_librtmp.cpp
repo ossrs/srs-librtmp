@@ -6351,6 +6351,24 @@ public:
     * @param stream_id, the stream id of packet to send over, 0 for control message.
     */
     virtual int send_and_free_messages(SrsSharedPtrMessage** msgs, int nb_msgs, int stream_id);
+
+    /**
+    * send the RTMP message and not free it.
+    * @param msg, the msg to send out, never be NULL.
+    * @param stream_id, the stream id of packet to send over, 0 for control message.
+    */
+    virtual int send_message(SrsSharedPtrMessage* msg, int stream_id);
+
+    /**
+     * send the RTMP message and not free it.
+     * static memory can be used as message buffer
+     * in this case, send_and_free.. function causes error when it freed in linux.
+     * @param msgs, the msgs to send out, never be NULL.
+     * @param nb_msgs, the size of msgs to send out.
+     * @param stream_id, the stream id of packet to send over, 0 for control message.
+     */
+    virtual int send_messages(SrsSharedPtrMessage** msgs, int nb_msgs,int stream_id);
+
     /**
     * send the RTMP packet and always free it.
     * user must never free or use the packet after this method,
@@ -6708,6 +6726,21 @@ public:
      * @param stream_id, the stream id of packet to send over, 0 for control message.
      */
     virtual int send_and_free_messages(SrsSharedPtrMessage** msgs, int nb_msgs, int stream_id);
+
+    /**
+        * send the RTMP message and not free it.
+        * @param msg, the msg to send out, never be NULL.
+        * @param stream_id, the stream id of packet to send over, 0 for control message.
+        */
+    virtual int send_message(SrsSharedPtrMessage* msg, int stream_id);
+
+    /**
+     * send the RTMP message and not free it.
+     * @param msgs, the msgs to send out, never be NULL.
+     * @param nb_msgs, the size of msgs to send out.
+     * @param stream_id, the stream id of packet to send over, 0 for control message.
+     */
+    virtual int send_messages(SrsSharedPtrMessage** msgs, int nb_msgs, int stream_id);
     /**
      * send the RTMP packet and always free it.
      * user must never free or use the packet after this method,
@@ -6716,6 +6749,7 @@ public:
      * @param stream_id, the stream id of packet to send over, 0 for control message.
      */
     virtual int send_and_free_packet(SrsPacket* packet, int stream_id);
+
 public:
     /**
      * handshake with server, try complex, then simple handshake.
@@ -22264,6 +22298,48 @@ int SrsProtocol::send_and_free_message(SrsSharedPtrMessage* msg, int stream_id)
     return send_and_free_messages(&msg, 1, stream_id);
 }
 
+int SrsProtocol::send_message(SrsSharedPtrMessage* msg, int stream_id)
+{
+	return send_messages(&msg, 1, stream_id);
+}
+
+int SrsProtocol::send_messages(SrsSharedPtrMessage** msgs, int nb_msgs, int stream_id)
+{
+	   srs_assert(msgs);
+	    srs_assert(nb_msgs > 0);
+
+	    // update the stream id in header.
+	    for (int i = 0; i < nb_msgs; i++) {
+	        SrsSharedPtrMessage* msg = msgs[i];
+
+	        if (!msg) {
+	            continue;
+	        }
+
+	        // check perfer cid and stream,
+	        // when one msg stream id is ok, ignore left.
+	        if (msg->check(stream_id)) {
+	            break;
+	        }
+	    }
+
+	    // donot use the auto free to free the msg,
+	    // for performance issue.
+	    int ret = do_send_messages(msgs, nb_msgs);
+
+	    // donot flush when send failed
+	    if (ret != ERROR_SUCCESS) {
+	        return ret;
+	    }
+
+	    // flush messages in manual queue
+	    if ((ret = manual_response_flush()) != ERROR_SUCCESS) {
+	        return ret;
+	    }
+
+	    return ret;
+}
+
 int SrsProtocol::send_and_free_messages(SrsSharedPtrMessage** msgs, int nb_msgs, int stream_id)
 {
     // always not NULL msg.
@@ -23365,6 +23441,17 @@ int SrsRtmpClient::send_and_free_messages(SrsSharedPtrMessage** msgs, int nb_msg
 {
     return protocol->send_and_free_messages(msgs, nb_msgs, stream_id);
 }
+
+int SrsRtmpClient::send_message(SrsSharedPtrMessage* msg, int stream_id)
+{
+	return protocol->send_message(msg,stream_id);
+}
+
+int SrsRtmpClient::send_messages(SrsSharedPtrMessage** msgs, int nb_msgs, int stream_id)
+{
+	return protocol->send_messages(msgs, nb_msgs, stream_id);
+}
+
 
 int SrsRtmpClient::send_and_free_packet(SrsPacket* packet, int stream_id)
 {
@@ -32404,6 +32491,30 @@ int srs_rtmp_write_packet(srs_rtmp_t rtmp, char type, u_int32_t timestamp, char*
     
     return ret;
 }
+
+int srs_rtmp_write_managed_packet(srs_rtmp_t rtmp, char type, u_int32_t timestamp, char* data, int size)
+{
+	  int ret = ERROR_SUCCESS;
+
+	    srs_assert(rtmp != NULL);
+	    Context* context = (Context*)rtmp;
+
+	    SrsSharedPtrMessage* msg = NULL;
+
+	    if ((ret = srs_rtmp_create_msg(type, timestamp, data, size, context->stream_id, &msg)) != ERROR_SUCCESS) {
+	        return ret;
+	    }
+
+	    srs_assert(msg);
+
+	    // send out encoded msg.
+	    if ((ret = context->rtmp->send_message(msg, context->stream_id)) != ERROR_SUCCESS) {
+	        return ret;
+	    }
+
+	    return ret;
+}
+
 
 srs_bool srs_rtmp_is_onMetaData(char type, char* data, int size)
 {

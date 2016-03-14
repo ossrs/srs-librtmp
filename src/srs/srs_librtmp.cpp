@@ -32485,12 +32485,36 @@ int srs_rtmp_write_packet(srs_rtmp_t rtmp, char type, u_int32_t timestamp, char*
     srs_assert(msg);
 
     // send out encoded msg.
-    if ((ret = context->rtmp->send_message(msg, context->stream_id)) != ERROR_SUCCESS) {
+    if ((ret = context->rtmp->send_and_free_message(msg, context->stream_id)) != ERROR_SUCCESS) {
         return ret;
     }
     
     return ret;
 }
+
+int srs_rtmp_write_managed_packet(srs_rtmp_t rtmp, char type, u_int32_t timestamp, char* data, int size)
+{
+	  int ret = ERROR_SUCCESS;
+
+	    srs_assert(rtmp != NULL);
+	    Context* context = (Context*)rtmp;
+
+	    SrsSharedPtrMessage* msg = NULL;
+
+	    if ((ret = srs_rtmp_create_msg(type, timestamp, data, size, context->stream_id, &msg)) != ERROR_SUCCESS) {
+	        return ret;
+	    }
+
+	    srs_assert(msg);
+
+	    // send out encoded msg.
+	    if ((ret = context->rtmp->send_message(msg, context->stream_id)) != ERROR_SUCCESS) {
+	        return ret;
+	    }
+
+	    return ret;
+}
+
 
 srs_bool srs_rtmp_is_onMetaData(char type, char* data, int size)
 {

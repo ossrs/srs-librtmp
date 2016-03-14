@@ -266,6 +266,23 @@ extern int srs_rtmp_write_packet(srs_rtmp_t rtmp,
 );
 
 /**
+ * write a audio / vidoe / script tag to rtmp stream
+ * @param type, source packet type, refer to macros :
+ * 			SRS_RTMP_TYPE_AUDIO, FlvTagAudio
+ * 			SRS_RTMP_TYPE_VIDEO, FlvTagVideo
+ * 			SRS_RTMP_TYPE_SCRIPT, FlvTagScript
+ * 			otherwise, invalid type.
+ * @param timestamp, in ms, overflow in 50 days
+ * @param data the packet data.
+ * @param size, size of packet in bytes
+ * @return the error code. 0 for success; otherwise, error.
+ *
+ * @remark: user have to manage data buffer (release or not),
+ */
+extern int srs_rtmp_write_managed_packet(srs_rtmp_t rtmp, char type, u_int32_t timestamp, char* data, int size);
+
+
+/**
 * whether type is script data and the data is onMetaData.
 */
 extern srs_bool srs_rtmp_is_onMetaData(char type, char* data, int size);

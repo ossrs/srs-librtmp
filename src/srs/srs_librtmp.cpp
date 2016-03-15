@@ -1602,6 +1602,7 @@ public:
      * @remark, not all message payload can be decoded to packet. for example,
      *       video/audio packet use raw bytes, no video/audio packet.
      */
+    bool is_allocated;
     char* payload;
 public:
     SrsCommonMessage();
@@ -1697,6 +1698,7 @@ private:
         // the reference count
         int shared_count;
     public:
+        bool is_allocated;
         SrsSharedPtrPayload();
         virtual ~SrsSharedPtrPayload();
     };
@@ -13461,6 +13463,7 @@ void SrsMessageHeader::initialize_video(int size, u_int32_t time, int stream)
 SrsCommonMessage::SrsCommonMessage()
 {
     payload = NULL;
+    is_allocated = false;
     size = 0;
 }
 
@@ -13469,13 +13472,25 @@ SrsCommonMessage::~SrsCommonMessage()
 #ifdef SRS_AUTO_MEM_WATCH
     srs_memory_unwatch(payload);
 #endif
-    srs_freep(payload);
+    if(is_allocated)
+    {
+    	srs_freep(payload);
+    	is_allocated = false;
+    }
 }
 
 void SrsCommonMessage::create_payload(int size)
 {
-    srs_freep(payload);
     
+	if(is_allocated)
+	{
+		srs_freep(payload);
+	}
+	else
+	{
+		is_allocated = true;
+	}
+
     payload = new char[size];
     srs_verbose("create payload for RTMP message. size=%d", size);
     
@@ -13488,6 +13503,7 @@ SrsSharedPtrMessage::SrsSharedPtrPayload::SrsSharedPtrPayload()
 {
     payload = NULL;
     size = 0;
+    is_allocated = false;
     shared_count = 0;
 }
 
@@ -13496,7 +13512,11 @@ SrsSharedPtrMessage::SrsSharedPtrPayload::~SrsSharedPtrPayload()
 #ifdef SRS_AUTO_MEM_WATCH
     srs_memory_unwatch(payload);
 #endif
-    srs_freep(payload);
+    if(is_allocated)
+    {
+    	srs_freep(payload);
+    	is_allocated = false;
+    }
 }
 
 SrsSharedPtrMessage::SrsSharedPtrMessage()

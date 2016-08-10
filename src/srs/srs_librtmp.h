@@ -1,7 +1,7 @@
 /*
 The MIT License (MIT)
 
-Copyright (c) 2013-2015 SRS(simple-rtmp-server)
+Copyright (c) 2013-2015 SRS(ossrs)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -41,7 +41,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 * Windows SRS-LIBRTMP pre-declare
 **************************************************************
 *************************************************************/
-// for srs-librtmp, @see https://github.com/simple-rtmp-server/srs/issues/213
+// for srs-librtmp, @see https://github.com/ossrs/srs/issues/213
 #ifdef _WIN32
     // include windows first.
     #include <windows.h>
@@ -88,25 +88,38 @@ extern int srs_version_revision();
 // the RTMP handler.
 typedef void* srs_rtmp_t;
 typedef void* srs_amf0_t;
-
+    
 /**
-* create/destroy a rtmp protocol stack.
-* @url rtmp url, for example: 
-*         rtmp://localhost/live/livestream
-*
-* @return a rtmp handler, or NULL if error occured.
-*/
+ * create/destroy a rtmp protocol stack.
+ * @url rtmp url, for example:
+ *         rtmp://localhost/live/livestream
+ * @remark default timeout to 30s if not set by srs_rtmp_set_timeout.
+ *
+ * @return a rtmp handler, or NULL if error occured.
+ */
 extern srs_rtmp_t srs_rtmp_create(const char* url);
 /**
-* create rtmp with url, used for connection specified application.
-* @param url the tcUrl, for exmple:
-*         rtmp://localhost/live
-* @remark this is used to create application connection-oriented,
-*       for example, the bandwidth client used this, no stream specified.
-*
-* @return a rtmp handler, or NULL if error occured.
-*/
+ * create rtmp with url, used for connection specified application.
+ * @param url the tcUrl, for exmple:
+ *         rtmp://localhost/live
+ * @remark this is used to create application connection-oriented,
+ *       for example, the bandwidth client used this, no stream specified.
+ * @remark default timeout to 30s if not set by srs_rtmp_set_timeout.
+ *
+ * @return a rtmp handler, or NULL if error occured.
+ */
 extern srs_rtmp_t srs_rtmp_create2(const char* url);
+/**
+ * set socket timeout
+ * @param recv_timeout_ms the timeout for receiving messages in ms.
+ * @param send_timeout_ms the timeout for sending message in ms.
+ * @remark user can set timeout once srs_rtmp_create/srs_rtmp_create2, 
+ *      or before srs_rtmp_handshake or srs_rtmp_dns_resolve to connect to server.
+ * @remark default timeout to 30s if not set by srs_rtmp_set_timeout.
+ *
+ * @return 0, success; otherswise, failed.
+ */
+extern int srs_rtmp_set_timeout(srs_rtmp_t rtmp, int recv_timeout_ms, int send_timeout_ms);
 /**
 * close and destroy the rtmp stack.
 * @remark, user should never use the rtmp again.
@@ -321,7 +334,7 @@ extern srs_bool srs_rtmp_is_onMetaData(char type, char* data, int size);
 * @remark for aac, only support profile 1-4, AAC main/LC/SSR/LTP,
 *       @see aac-mp4a-format-ISO_IEC_14496-3+2001.pdf, page 23, 1.5.1.1 Audio object type
 *
-* @see https://github.com/simple-rtmp-server/srs/issues/212
+* @see https://github.com/ossrs/srs/issues/212
 * @see E.4.2.1 AUDIODATA of video_file_format_spec_v10_1.pdf
 * 
 * @return 0, success; otherswise, failed.
@@ -377,7 +390,7 @@ extern int srs_aac_adts_frame_size(char* aac_raw_data, int ac_raw_size);
 * @remark, cts = pts - dts
 * @remark, use srs_h264_startswith_annexb to check whether frame is annexb format.
 * @example /trunk/research/librtmp/srs_h264_raw_publish.c
-* @see https://github.com/simple-rtmp-server/srs/issues/66
+* @see https://github.com/ossrs/srs/issues/66
 * 
 * @return 0, success; otherswise, failed.
 *       for dvbsp error, @see srs_h264_is_dvbsp_error().
@@ -419,7 +432,7 @@ extern int srs_h264_write_raw_frames(srs_rtmp_t rtmp,
 /**
 * whether error_code is dvbsp(drop video before sps/pps/sequence-header) error.
 *
-* @see https://github.com/simple-rtmp-server/srs/issues/203
+* @see https://github.com/ossrs/srs/issues/203
 * @example /trunk/research/librtmp/srs_h264_raw_publish.c
 * @remark why drop video?
 *       some encoder, for example, ipcamera, will send sps/pps before each IFrame,
@@ -430,14 +443,14 @@ extern srs_bool srs_h264_is_dvbsp_error(int error_code);
 /**
 * whether error_code is duplicated sps error.
 * 
-* @see https://github.com/simple-rtmp-server/srs/issues/204
+* @see https://github.com/ossrs/srs/issues/204
 * @example /trunk/research/librtmp/srs_h264_raw_publish.c
 */
 extern srs_bool srs_h264_is_duplicated_sps_error(int error_code);
 /**
 * whether error_code is duplicated pps error.
 * 
-* @see https://github.com/simple-rtmp-server/srs/issues/204
+* @see https://github.com/ossrs/srs/issues/204
 * @example /trunk/research/librtmp/srs_h264_raw_publish.c
 */
 extern srs_bool srs_h264_is_duplicated_pps_error(int error_code);
@@ -982,7 +995,7 @@ typedef void* srs_hijack_io_t;
     * set the socket recv timeout.
     * @return 0, success; otherswise, failed.
     */
-    extern void srs_hijack_io_set_recv_timeout(srs_hijack_io_t ctx, int64_t timeout_us);
+    extern int srs_hijack_io_set_recv_timeout(srs_hijack_io_t ctx, int64_t timeout_us);
     /**
     * get the socket recv timeout.
     * @return 0, success; otherswise, failed.
@@ -997,7 +1010,7 @@ typedef void* srs_hijack_io_t;
     * set the socket send timeout.
     * @return 0, success; otherswise, failed.
     */
-    extern void srs_hijack_io_set_send_timeout(srs_hijack_io_t ctx, int64_t timeout_us);
+    extern int srs_hijack_io_set_send_timeout(srs_hijack_io_t ctx, int64_t timeout_us);
     /**
     * get the socket send timeout.
     * @return 0, success; otherswise, failed.
@@ -1035,7 +1048,7 @@ typedef void* srs_hijack_io_t;
 * Windows SRS-LIBRTMP solution
 **************************************************************
 *************************************************************/
-// for srs-librtmp, @see https://github.com/simple-rtmp-server/srs/issues/213
+// for srs-librtmp, @see https://github.com/ossrs/srs/issues/213
 #ifdef _WIN32
     // for time.
     #define _CRT_SECURE_NO_WARNINGS

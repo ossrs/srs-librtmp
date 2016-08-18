@@ -27,8 +27,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef SRS_AUTO_HEADER_HPP
 #define SRS_AUTO_HEADER_HPP
 
-#define SRS_AUTO_BUILD_TS "1471493494"
-#define SRS_AUTO_BUILD_DATE "2016-08-18 12:11:34"
+#define SRS_AUTO_BUILD_TS "1471494191"
+#define SRS_AUTO_BUILD_DATE "2016-08-18 12:23:11"
 #define SRS_AUTO_UNAME "Darwin winlin.lan 15.6.0 Darwin Kernel Version 15.6.0: Thu Jun 23 18:25:34 PDT 2016; root:xnu-3248.60.10~1/RELEASE_X86_64 x86_64"
 #define SRS_AUTO_USER_CONFIGURE "--x86-x64  --export-librtmp-single=/Users/winlin/git/srs-librtmp/src/srs"
 #define SRS_AUTO_CONFIGURE "--prefix=/usr/local/srs --without-hls --without-hds --without-dvr --without-nginx --without-ssl --without-ffmpeg --without-transcode --without-ingest --without-stat --without-http-callback --without-http-server --without-stream-caster --without-http-api --with-librtmp --with-research --without-utest --without-gperf --without-gmc --without-gmp --without-gcp --without-gprof --without-arm-ubuntu12 --without-mips-ubuntu12 --log-trace"
@@ -34205,9 +34205,12 @@ int srs_write_h264_raw_frame(Context* context,
     // ignore others.
     // 5bits, 7.3.1 NAL unit syntax,
     // H.264-AVC-ISO_IEC_14496-10.pdf, page 44.
-    //  7: SPS, 8: PPS, 5: I Frame, 1: P Frame
+    //  7: SPS, 8: PPS, 5: I Frame, 1: P Frame, 9: AUD
     SrsAvcNaluType nut = (SrsAvcNaluType)(frame[0] & 0x1f);
-    if (nut != SrsAvcNaluTypeSPS && nut != SrsAvcNaluTypePPS && nut != SrsAvcNaluTypeIDR && nut != SrsAvcNaluTypeNonIDR) {
+    if (nut != SrsAvcNaluTypeSPS && nut != SrsAvcNaluTypePPS
+        && nut != SrsAvcNaluTypeIDR && nut != SrsAvcNaluTypeNonIDR
+        && nut != SrsAvcNaluTypeAccessUnitDelimiter
+    ) {
         return ret;
     }
     

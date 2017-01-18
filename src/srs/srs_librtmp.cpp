@@ -27,8 +27,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef SRS_AUTO_HEADER_HPP
 #define SRS_AUTO_HEADER_HPP
 
-#define SRS_AUTO_BUILD_TS "1484727761"
-#define SRS_AUTO_BUILD_DATE "2017-01-18 16:22:41"
+#define SRS_AUTO_BUILD_TS "1484728320"
+#define SRS_AUTO_BUILD_DATE "2017-01-18 16:32:00"
 #define SRS_AUTO_UNAME "Darwin bogon 16.3.0 Darwin Kernel Version 16.3.0: Thu Nov 17 20:23:58 PST 2016; root:xnu-3789.31.2~1/RELEASE_X86_64 x86_64"
 #define SRS_AUTO_USER_CONFIGURE " --osx --export-librtmp-single=/Users/winlin/git/srs-librtmp/src/srs"
 #define SRS_AUTO_CONFIGURE "--prefix=/usr/local/srs --without-hls --without-hds --without-dvr --without-nginx --without-ssl --without-ffmpeg --without-transcode --without-ingest --without-stat --without-http-callback --without-http-server --without-stream-caster --without-kafka --without-http-api --with-librtmp --with-research --without-utest --without-gperf --without-gmc --without-gmd --without-gmp --without-gcp --without-gprof --without-arm-ubuntu12 --without-mips-ubuntu12 --log-trace"
@@ -12786,6 +12786,7 @@ extern int srs_rtmp_bandwidth_check(srs_rtmp_t rtmp,
 *             FlvTagAudio, @see "E.4.2.1 AUDIODATA"
 *            FlvTagVideo, @see "E.4.3.1 VIDEODATA"
 *            FlvTagScript, @see "E.4.4.1 SCRIPTDATA"
+*            User can free the packet by srs_rtmp_free_packet.
 * @param size, size of packet.
 * @return the error code. 0 for success; otherwise, error.
 *
@@ -12802,6 +12803,11 @@ extern int srs_rtmp_read_packet(srs_rtmp_t rtmp,
 extern int srs_rtmp_write_packet(srs_rtmp_t rtmp, 
     char type, u_int32_t timestamp, char* data, int size
 );
+    
+/**
+ * Free the packet allocated by srs_rtmp_read_packet.
+ */
+extern void srs_rtmp_free_packet(char* data);
 
 /**
 * whether type is script data and the data is onMetaData.
@@ -40342,6 +40348,11 @@ int srs_rtmp_write_packet(srs_rtmp_t rtmp, char type, u_int32_t timestamp, char*
     }
     
     return ret;
+}
+    
+void srs_rtmp_free_packet(char* data)
+{
+    srs_freepa(data);
 }
 
 srs_bool srs_rtmp_is_onMetaData(char type, char* data, int size)

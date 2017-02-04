@@ -4,8 +4,8 @@ srs.librtmp
 The client library srs-librtmp of SRS(https://github.com/ossrs/srs)
 
 This repository is exported by SRS3.0+, please read the wiki(
-[CN](https://github.com/ossrs/srs/wiki/v2_CN_SrsLibrtmp#export-srs-librtmp),
-[EN](https://github.com/ossrs/srs/wiki/v2_EN_SrsLibrtmp#export-srs-librtmp)
+[CN](https://github.com/ossrs/srs/wiki/v3_CN_SrsLibrtmp#export-srs-librtmp),
+[EN](https://github.com/ossrs/srs/wiki/v3_EN_SrsLibrtmp#export-srs-librtmp)
 ).
 
 When you program on linux, the exported project or files can be direclty used.

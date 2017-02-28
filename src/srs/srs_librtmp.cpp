@@ -27,8 +27,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef SRS_AUTO_HEADER_HPP
 #define SRS_AUTO_HEADER_HPP
 
-#define SRS_AUTO_BUILD_TS "1488260906"
-#define SRS_AUTO_BUILD_DATE "2017-02-28 13:48:26"
+#define SRS_AUTO_BUILD_TS "1488269928"
+#define SRS_AUTO_BUILD_DATE "2017-02-28 16:18:48"
 #define SRS_AUTO_UNAME "Darwin Mac 16.4.0 Darwin Kernel Version 16.4.0: Thu Dec 22 22:53:21 PST 2016; root:xnu-3789.41.3~3/RELEASE_X86_64 x86_64"
 #define SRS_AUTO_USER_CONFIGURE "--x86-x64  --export-librtmp-single=/Users/winlin/git/srs-librtmp/src/srs"
 #define SRS_AUTO_CONFIGURE "--prefix=/usr/local/srs --with-hls --without-hds --with-dvr --without-nginx --without-ssl --without-ffmpeg --without-transcode --without-ingest --without-stat --with-http-callback --with-http-server --without-stream-caster --without-kafka --with-http-api --with-librtmp --with-research --without-utest --without-gperf --without-gmc --without-gmd --without-gmp --without-gcp --without-gprof --without-arm-ubuntu12 --without-mips-ubuntu12 --log-trace"
@@ -14499,6 +14499,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
         void  *iov_base;    /* Starting address */
         size_t iov_len;     /* Number of bytes to transfer */
     };
+
+    // for pid.
+    typedef int pid_t;
+    pid_t getpid(void);
 #endif
 
 #include <stdint.h>
@@ -14515,10 +14519,13 @@ extern "C"{
 *     srs_url_schema_vis   :    rtmp://ip:port/app/stream?vhost=xxx
 *     srs_url_schema_vis2  :    rtmp://ip:port/app/stream?domain=xxx
 */
-enum srs_url_schema{
+enum srs_url_schema
+{
+    // Forbidden.
+    srs_url_schema_forbidden = 0,
     // Normal RTMP URL, the vhost put in host field, using DNS to resolve the server ip.
     // For example, rtmp://vhost:port/app/stream
-    srs_url_schema_normal = 0,
+    srs_url_schema_normal,
     // VIA(vhost in app), the vhost put in app field.
     // For example, rtmp://ip:port/vhost/app/stream
     srs_url_schema_via,
@@ -14661,16 +14668,13 @@ extern int srs_rtmp_connect_app2(srs_rtmp_t rtmp,
     char srs_primary[128], char srs_authors[128], 
     char srs_version[32], int* srs_id, int* srs_pid
 );
-
+    
 /**
-* connect to rtmp vhost/app
-* category: publish/play
-* previous: handshake
-* next: publish or play
-*
-* @return 0, success; otherswise, failed.
-*/
-extern int srs_rtmp_connect_app3(srs_rtmp_t rtmp, enum srs_url_schema sus);
+ * Set the schema of URL when connect to server.
+ * @param schema, The schema of URL, @see srs_url_schema.
+ * @return 0, success; otherswise, failed.
+ */
+extern int srs_rtmp_set_schema(srs_rtmp_t rtmp, enum srs_url_schema schema);
 
 /**
 * play a live/vod stream.
@@ -15487,13 +15491,30 @@ extern const char* srs_human_format_time();
     // for getpid.
     #include <unistd.h>
 #endif
-// when disabled log, donot compile it.
+// The log function for librtmp.
+// User can disable it by define macro SRS_DISABLE_LOG.
+// Or user can directly use them, or define the alias by:
+//      #define trace(msg, ...) srs_human_trace(msg, ##__VA_ARGS__)
+//      #define warn(msg, ...) srs_human_warn(msg, ##__VA_ARGS__)
+//      #define error(msg, ...) srs_human_error(msg, ##__VA_ARGS__)
 #ifdef SRS_DISABLE_LOG
     #define srs_human_trace(msg, ...) (void)0
+    #define srs_human_warn(msg, ...) (void)0
+    #define srs_human_error(msg, ...) (void)0
     #define srs_human_verbose(msg, ...) (void)0
     #define srs_human_raw(msg, ...) (void)0
 #else
-    #define srs_human_trace(msg, ...) printf("[%s][%d] ", srs_human_format_time(), getpid());printf(msg, ##__VA_ARGS__);printf("\n")
+    #define srs_human_trace(msg, ...) \
+        fprintf(stdout, "[Trace][%d][%s][%d] ", getpid(), srs_human_format_time(), getpid());\
+        fprintf(stdout, msg, ##__VA_ARGS__); fprintf(stdout, "\n")
+    #define srs_human_warn(msg, ...) \
+        fprintf(stdout, "[Warn][%d][%s][%d] ", getpid(), srs_human_format_time(), getpid()); \
+        fprintf(stdout, msg, ##__VA_ARGS__); \
+        fprintf(stdout, "\n")
+    #define srs_human_error(msg, ...) \
+        fprintf(stderr, "[Error][%d][%s][%d] ", getpid(), srs_human_format_time(), getpid());\
+        fprintf(stderr, msg, ##__VA_ARGS__); \
+        fprintf(stderr, "\n")
     #define srs_human_verbose(msg, ...) (void)0
     #define srs_human_raw(msg, ...) printf(msg, ##__VA_ARGS__)
 #endif
@@ -15638,10 +15659,6 @@ typedef void* srs_hijack_io_t;
     #define lseek _lseek
     #define write _write
     #define read _read
-    
-    // for pid.
-    typedef int pid_t;
-    pid_t getpid(void);
     
     // for socket.
     ssize_t writev(int fd, const struct iovec *iov, int iovcnt);
@@ -46405,6 +46422,7 @@ struct Context
     std::string app;
     std::string stream;
     std::string param;
+    srs_url_schema schema;
 
     // extra request object for connect to server, NULL to ignore.
     SrsRequest* req;
@@ -46455,6 +46473,7 @@ struct Context
         h264_sps_changed = false;
         h264_pps_changed = false;
         rtimeout = stimeout = SRS_CONSTS_NO_TMMS;
+        schema = srs_url_schema_forbidden;
     }
     virtual ~Context() {
         srs_freep(req);
@@ -47074,11 +47093,22 @@ int srs_rtmp_connect_app(srs_rtmp_t rtmp)
     
     srs_assert(rtmp != NULL);
     Context* context = (Context*)rtmp;
-
-    string tcUrl = srs_generate_tc_url(
-            context->ip, context->vhost, context->app, context->port,
-            context->param
-        );
+    
+    string tcUrl;
+    switch(context->schema) {
+        case srs_url_schema_normal:
+            tcUrl=srs_generate_normal_tc_url(context->ip, context->vhost, context->app, context->port);
+            break;
+        case srs_url_schema_via:
+            tcUrl=srs_generate_via_tc_url(context->ip, context->vhost, context->app, context->port);
+            break;
+        case srs_url_schema_vis:
+        case srs_url_schema_vis2:
+            tcUrl=srs_generate_vis_tc_url(context->ip, context->vhost, context->app, context->port);
+            break;
+        default:
+            break;
+    }
     
     if ((ret = context->rtmp->connect_app(
         context->app, tcUrl, context->req, true)) != ERROR_SUCCESS) 
@@ -47107,10 +47137,21 @@ int srs_rtmp_connect_app2(srs_rtmp_t rtmp,
     srs_assert(rtmp != NULL);
     Context* context = (Context*)rtmp;
     
-    string tcUrl = srs_generate_tc_url(
-        context->ip, context->vhost, context->app, context->port,
-        context->param
-    );
+    string tcUrl;
+    switch(context->schema) {
+        case srs_url_schema_normal:
+            tcUrl=srs_generate_normal_tc_url(context->ip, context->vhost, context->app, context->port);
+            break;
+        case srs_url_schema_via:
+            tcUrl=srs_generate_via_tc_url(context->ip, context->vhost, context->app, context->port);
+            break;
+        case srs_url_schema_vis:
+        case srs_url_schema_vis2:
+            tcUrl=srs_generate_vis_tc_url(context->ip, context->vhost, context->app, context->port);
+            break;
+        default:
+            break;
+    }
     
     std::string sip, sserver, sprimary, sauthors, sversion;
     
@@ -47128,34 +47169,14 @@ int srs_rtmp_connect_app2(srs_rtmp_t rtmp,
     return ret;
 }
 
-int srs_rtmp_connect_app3(srs_rtmp_t rtmp, enum srs_url_schema sus)
+int srs_rtmp_set_schema(srs_rtmp_t rtmp, enum srs_url_schema schema)
 {
     int ret = ERROR_SUCCESS;
 
     srs_assert(rtmp != NULL);
     Context* context = (Context*)rtmp;
-
-    string tcUrl;
-    switch(sus) {
-        case srs_url_schema_normal:
-            tcUrl=srs_generate_normal_tc_url(context->ip, context->vhost, context->app, context->port);
-            break;
-        case srs_url_schema_via:
-            tcUrl=srs_generate_via_tc_url(context->ip, context->vhost, context->app, context->port);
-            break;
-        case srs_url_schema_vis:
-        case srs_url_schema_vis2:
-            tcUrl=srs_generate_vis_tc_url(context->ip, context->vhost, context->app, context->port);
-            break;
-        default:
-            break;
-    }
-
-    if ((ret = context->rtmp->connect_app(
-            context->app, tcUrl, context->req, true)) != ERROR_SUCCESS)
-    {
-        return ret;
-    }
+    
+    context->schema = schema;
 
     return ret;
 }

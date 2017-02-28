@@ -482,4 +482,87 @@ The API to read or write FLV file.
     extern void srs_flv_close(srs_flv_t flv);
     ```
 
+## AMF0 Format
+
+The following APIs are AMF0 codec.
+
+1. Number defined as double:
+```
+typedef double srs_amf0_number;
+```
+
+1. Create AMF0 instance:
+```
+extern srs_amf0_t srs_amf0_create_string(const char* value);
+extern srs_amf0_t srs_amf0_create_number(srs_amf0_number value);
+extern srs_amf0_t srs_amf0_create_ecma_array();
+extern srs_amf0_t srs_amf0_create_strict_array();
+extern srs_amf0_t srs_amf0_create_object();
+```
+
+1. Parse AMF0 instance from buffer:
+```
+extern srs_amf0_t srs_amf0_parse(char* data, int size, int* nparsed);
+```
+
+1. Encode AMF0 instance to buffer:
+```
+extern int srs_amf0_size(srs_amf0_t amf0);
+extern int srs_amf0_serialize(srs_amf0_t amf0, char* data, int size);
+```
+
+1. Detect the type of AMF0 instance:
+```
+extern srs_bool srs_amf0_is_string(srs_amf0_t amf0);
+extern srs_bool srs_amf0_is_boolean(srs_amf0_t amf0);
+extern srs_bool srs_amf0_is_number(srs_amf0_t amf0);
+extern srs_bool srs_amf0_is_null(srs_amf0_t amf0);
+extern srs_bool srs_amf0_is_object(srs_amf0_t amf0);
+extern srs_bool srs_amf0_is_ecma_array(srs_amf0_t amf0);
+extern srs_bool srs_amf0_is_strict_array(srs_amf0_t amf0);
+```
+
+1. Convert the AMF0 instance to basic type:
+```
+extern const char* srs_amf0_to_string(srs_amf0_t amf0);
+extern srs_bool srs_amf0_to_boolean(srs_amf0_t amf0);
+extern srs_amf0_number srs_amf0_to_number(srs_amf0_t amf0);
+```
+
+1. Set the AMF0 Number:
+```
+extern void srs_amf0_set_number(srs_amf0_t amf0, srs_amf0_number value);
+```
+
+1. For AMF0 Object instance:
+```
+extern int srs_amf0_object_property_count(srs_amf0_t amf0);
+extern const char* srs_amf0_object_property_name_at(srs_amf0_t amf0, int index);
+extern srs_amf0_t srs_amf0_object_property_value_at(srs_amf0_t amf0, int index);
+extern srs_amf0_t srs_amf0_object_property(srs_amf0_t amf0, const char* name);
+extern void srs_amf0_object_property_set(srs_amf0_t amf0, const char* name, srs_amf0_t value);
+extern void srs_amf0_object_clear(srs_amf0_t amf0);
+```
+
+1. For AMF0 EcmaArray instance:
+```
+extern int srs_amf0_ecma_array_property_count(srs_amf0_t amf0);
+extern const char* srs_amf0_ecma_array_property_name_at(srs_amf0_t amf0, int index);
+extern srs_amf0_t srs_amf0_ecma_array_property_value_at(srs_amf0_t amf0, int index);
+extern srs_amf0_t srs_amf0_ecma_array_property(srs_amf0_t amf0, const char* name);
+extern void srs_amf0_ecma_array_property_set(srs_amf0_t amf0, const char* name, srs_amf0_t value);
+```
+
+1. For AMF0 StrictArray instance:
+```
+extern int srs_amf0_strict_array_property_count(srs_amf0_t amf0);
+extern srs_amf0_t srs_amf0_strict_array_property_at(srs_amf0_t amf0, int index);
+extern void srs_amf0_strict_array_append(srs_amf0_t amf0, srs_amf0_t value);
+```
+
+1. Destroy AMF0 instance:
+```
+extern void srs_amf0_free(srs_amf0_t amf0);
+```
+
 Winlin 2014.11

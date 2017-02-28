@@ -47,6 +47,16 @@ The API to publish or play RTMP stream.
     extern int srs_rtmp_handshake(srs_rtmp_t rtmp);
     ```
 
+1. Setup the RTMP object:
+    ```
+    /**
+    * Set the schema of URL when connect to tcUrl by srs_rtmp_connect_app.
+     * @param schema, The schema of URL, @see srs_url_schema.
+     * @return 0, success; otherswise, failed.
+     */
+    extern int srs_rtmp_set_schema(srs_rtmp_t rtmp, enum srs_url_schema schema);
+    ```
+
 1. Connect to RTMP app:
 
     ```
@@ -59,6 +69,35 @@ The API to publish or play RTMP stream.
     * @return 0, success; otherswise, failed.
     */
     extern int srs_rtmp_connect_app(srs_rtmp_t rtmp);
+    ```
+
+1. Retrieve server informations:
+    ```
+    /**
+     * Retrieve server ip from RTMP handler.
+     * @Param ip A NULL terminated string specifies the server ip.
+     * @Param pid An int specifies the PID of server. -1 is no PID information.
+     * @Param cid An int specifies the CID of connection. -1 is no CID information.
+     * @remark For SRS, ip/pid/cid is the UUID of a client. For other server, these values maybe unknown.
+     * @remark When connected to server by srs_rtmp_connect_app, the information is ready to be retrieved.
+     * @return 0, success; otherswise, failed.
+     */
+    extern int srs_rtmp_get_server_id(srs_rtmp_t rtmp, char** ip, int* pid, int* cid);
+
+    /**
+     * Retrieve server signature from RTMP handler.
+     * @Param sig A NULL terminated string specifies the server signature.
+     * @remark When connected to server by srs_rtmp_connect_app, the information is ready to be retrieved.
+     * @return 0, success; otherswise, failed.
+     */
+    extern int srs_rtmp_get_server_sig(srs_rtmp_t rtmp, char** sig);
+
+    /**
+     * Retrieve server version from RTMP handler, which in major.minor.revision.build format.
+     * @remark When connected to server by srs_rtmp_connect_app, the information is ready to be retrieved.
+     * @return 0, success; otherswise, failed.
+     */
+    extern int srs_rtmp_get_server_version(srs_rtmp_t rtmp, int* major, int* minor, int* revision, int* build);
     ```
 
 1. Start play or publish stream:

@@ -27,8 +27,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef SRS_AUTO_HEADER_HPP
 #define SRS_AUTO_HEADER_HPP
 
-#define SRS_AUTO_BUILD_TS "1577091721"
-#define SRS_AUTO_BUILD_DATE "2019-12-23 17:02:01"
+#define SRS_AUTO_BUILD_TS "1577092348"
+#define SRS_AUTO_BUILD_DATE "2019-12-23 17:12:28"
 #define SRS_AUTO_UNAME "Darwin Mac 18.7.0 Darwin Kernel Version 18.7.0: Sat Oct 12 00:02:19 PDT 2019; root:xnu-4903.278.12~1/RELEASE_X86_64 x86_64"
 #define SRS_AUTO_USER_CONFIGURE "--x86-x64  --export-librtmp-single=/Users/winlin/git/srs-librtmp/src/srs"
 #define SRS_AUTO_CONFIGURE "--prefix=/usr/local/srs --without-hls --without-hds --without-dvr --without-nginx --without-ssl --without-ffmpeg --without-transcode --without-ingest --without-stat --without-http-callback --without-http-server --without-stream-caster --without-http-api --with-librtmp --with-research --without-utest --without-gperf --without-gmc --without-gmp --without-gcp --without-gprof --without-arm-ubuntu12 --without-mips-ubuntu12 --log-trace"
@@ -22194,7 +22194,8 @@ int SrsPacket::encode_packet(SrsStream* stream)
 SrsProtocol::AckWindowSize::AckWindowSize()
 {
     window = 0;
-    sequence_number = nb_recv_bytes = 0;
+    sequence_number = 0;
+    nb_recv_bytes = 0;
 }
 
 SrsProtocol::SrsProtocol(ISrsProtocolReaderWriter* io)
@@ -29051,8 +29052,9 @@ void srs_discovery_tc_url(
     vhost = host;
     srs_vhost_resolve(vhost, app, param);
     srs_vhost_resolve(vhost, stream, param);
-    
-    if (param == "?vhost="SRS_CONSTS_RTMP_DEFAULT_VHOST) {
+
+    // There must be a space to make VS2015 happy.
+    if (param == "?vhost=" SRS_CONSTS_RTMP_DEFAULT_VHOST) {
         param = "";
     }
 }

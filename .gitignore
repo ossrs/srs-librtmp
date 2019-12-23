@@ -29,4 +29,9 @@
 
 *.dSYM
 .DS_Store
+.vs
+*.opendb
+*.db
+ipch
+x64
 

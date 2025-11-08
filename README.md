@@ -1,6 +1,8 @@
 srs.librtmp
 ===========
 
+**IMPORTANT NOTE**: This repository is deprecated and archived, please use [srs-rn](https://github.com/ossrs/srs-rn) instead. srs-rn is the future of client project for SRS and Oryx.
+
 [SRS](https://github.com/ossrs/srs) is a dedicated server project,
 please use [librtmp](https://github.com/ossrs/librtmp) instead,
 please read [#32](https://github.com/ossrs/srs-librtmp/issues/32).
